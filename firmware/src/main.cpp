@@ -7,6 +7,7 @@
 #include <ArduinoJson.h>
 #include <string.h>
 #include "splash_bmp.h"
+#include "arrows.h"
 #include "debug_log.h"
 #include "version.h"
 
@@ -44,10 +45,11 @@ struct NavState {
   int dist_m = -1;
   bool camera = false;
   int cam_m = -1;
+  int cam_kmh = -1; // лимит камеры, км/ч (−1 = нет)
   uint32_t last_update_ms = 0;
   bool has_data = false;
   bool has_icon = false;
-  uint8_t icon[128]; // 32x32 mono
+  uint8_t icon[128]; // legacy 32x32 mono (не используем в новом HUD)
   char street[28];
 };
 
@@ -57,80 +59,18 @@ struct DrawnNav {
   int dist_m = -999;
   bool camera = false;
   int cam_m = -999;
-  bool has_icon = false;
-  uint8_t icon[128];
-  char street[28];
+  int cam_kmh = -999;
+  bool cam_blink_on = false;
 };
 
 NavState nav;
 DrawnNav drawn;
-
-// 32x32 arrow bitmaps (1 bit per pixel, MSB left)
-static const uint8_t BMP_LEFT[] PROGMEM = {
-  0x00,0x00,0x00,0x00, 0x00,0x18,0x00,0x00, 0x00,0x38,0x00,0x00, 0x00,0x78,0x00,0x00,
-  0x00,0xf8,0x00,0x00, 0x01,0xf8,0x00,0x00, 0x03,0xf8,0x00,0x00, 0x07,0xff,0xff,0x00,
-  0x0f,0xff,0xff,0x00, 0x1f,0xff,0xff,0x00, 0x3f,0xff,0xff,0x00, 0x7f,0xff,0xff,0x00,
-  0x3f,0xff,0xff,0x00, 0x1f,0xff,0xff,0x00, 0x0f,0xff,0xff,0x00, 0x07,0xff,0xff,0x00,
-  0x03,0xf8,0x00,0x00, 0x01,0xf8,0x00,0x00, 0x00,0xf8,0x00,0x00, 0x00,0x78,0x00,0x00,
-  0x00,0x38,0x00,0x00, 0x00,0x18,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
-  0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
-  0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00
-};
-
-static const uint8_t BMP_RIGHT[] PROGMEM = {
-  0x00,0x00,0x00,0x00, 0x00,0x00,0x18,0x00, 0x00,0x00,0x1c,0x00, 0x00,0x00,0x1e,0x00,
-  0x00,0x00,0x1f,0x00, 0x00,0x00,0x1f,0x80, 0x00,0x00,0x1f,0xc0, 0x00,0xff,0xff,0xe0,
-  0x00,0xff,0xff,0xf0, 0x00,0xff,0xff,0xf8, 0x00,0xff,0xff,0xfc, 0x00,0xff,0xff,0xfe,
-  0x00,0xff,0xff,0xfc, 0x00,0xff,0xff,0xf8, 0x00,0xff,0xff,0xf0, 0x00,0xff,0xff,0xe0,
-  0x00,0x00,0x1f,0xc0, 0x00,0x00,0x1f,0x80, 0x00,0x00,0x1f,0x00, 0x00,0x00,0x1e,0x00,
-  0x00,0x00,0x1c,0x00, 0x00,0x00,0x18,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
-  0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
-  0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00
-};
-
-static const uint8_t BMP_STRAIGHT[] PROGMEM = {
-  0x00,0x01,0x80,0x00, 0x00,0x03,0xc0,0x00, 0x00,0x07,0xe0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x1f,0xf8,0x00, 0x00,0x3f,0xfc,0x00, 0x00,0x7f,0xfe,0x00, 0x00,0xff,0xff,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x00,0x00,0x00
-};
-
-static const uint8_t BMP_UTURN[] PROGMEM = {
-  0x00,0x3f,0xfc,0x00, 0x00,0xff,0xff,0x00, 0x01,0xff,0xff,0x80, 0x03,0xf0,0x0f,0xc0,
-  0x07,0xc0,0x03,0xe0, 0x07,0x80,0x01,0xe0, 0x0f,0x00,0x00,0xf0, 0x0e,0x00,0x00,0x70,
-  0x0e,0x00,0x00,0x70, 0x0e,0x00,0x00,0x70, 0x0e,0x00,0x00,0x70, 0x0e,0x00,0x18,0x70,
-  0x0e,0x00,0x3c,0x70, 0x0e,0x00,0x7e,0x70, 0x0e,0x00,0xff,0x70, 0x0e,0x01,0xff,0xf0,
-  0x0e,0x00,0xff,0x70, 0x0e,0x00,0x7e,0x70, 0x0e,0x00,0x3c,0x70, 0x0e,0x00,0x18,0x70,
-  0x0e,0x00,0x00,0x70, 0x0e,0x00,0x00,0x70, 0x0e,0x00,0x00,0x70, 0x0e,0x00,0x00,0x70,
-  0x0e,0x00,0x00,0x70, 0x0e,0x00,0x00,0x70, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
-  0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00
-};
-
-static const uint8_t BMP_ROUND[] PROGMEM = {
-  0x00,0x0f,0xf0,0x00, 0x00,0x3f,0xfc,0x00, 0x00,0x7f,0xfe,0x00, 0x00,0xf8,0x1f,0x00,
-  0x01,0xe0,0x07,0x80, 0x03,0xc0,0x03,0xc0, 0x03,0x80,0x01,0xc0, 0x07,0x00,0x00,0xe0,
-  0x07,0x00,0x00,0xe0, 0x0e,0x00,0x00,0x70, 0x0e,0x01,0x80,0x70, 0x0e,0x03,0xc0,0x70,
-  0x0e,0x07,0xe0,0x70, 0x0e,0x0f,0xf0,0x70, 0x0e,0x07,0xe0,0x70, 0x0e,0x03,0xc0,0x70,
-  0x0e,0x01,0x80,0x70, 0x0e,0x00,0x00,0x70, 0x07,0x00,0x00,0xe0, 0x07,0x00,0x00,0xe0,
-  0x03,0x80,0x01,0xc0, 0x03,0xc0,0x03,0xc0, 0x01,0xe0,0x07,0x80, 0x00,0xf8,0x1f,0x00,
-  0x00,0x7f,0xfe,0x00, 0x00,0x3f,0xfc,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x00,0x00,0x00,
-  0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00
-};
-
-static const uint8_t BMP_ARRIVE[] PROGMEM = {
-  0x00,0x01,0x80,0x00, 0x00,0x03,0xc0,0x00, 0x00,0x07,0xe0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x1f,0xf8,0x00, 0x00,0x3f,0xfc,0x00, 0x00,0x7f,0xfe,0x00, 0x00,0xff,0xff,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00,
-  0x00,0x0f,0xf0,0x00, 0x00,0x0f,0xf0,0x00, 0x00,0x3f,0xfc,0x00, 0x00,0x3f,0xfc,0x00,
-  0x00,0x3f,0xfc,0x00, 0x00,0x3f,0xfc,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
-  0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00
-};
+static bool camBlinkOn = true;
+static uint32_t lastCamBlinkMs = 0;
+static const uint32_t CAM_BLINK_MS = 450;
+// Dual-color OLED: yellow y=0..15, blue y=16..63. Blue split at x=64.
+static const int BLUE_TOP = 16;
+static const int BLUE_SPLIT = 64;
 
 Turn parseTurn(const char *s) {
   if (!s) return Turn::None;
@@ -162,11 +102,13 @@ const char *turnLabel(Turn t) {
 const uint8_t *turnBitmap(Turn t) {
   switch (t) {
     case Turn::Left:
-    case Turn::SlightLeft:
       return BMP_LEFT;
+    case Turn::SlightLeft:
+      return BMP_SLIGHT_L;
     case Turn::Right:
-    case Turn::SlightRight:
       return BMP_RIGHT;
+    case Turn::SlightRight:
+      return BMP_SLIGHT_R;
     case Turn::UTurn:
       return BMP_UTURN;
     case Turn::Roundabout:
@@ -179,21 +121,21 @@ const uint8_t *turnBitmap(Turn t) {
   }
 }
 
-void formatDistance(int meters, char *buf, size_t n) {
+/** Правая половина синего: только метры + «m», как просил HUD. */
+void formatMetersOnly(int meters, char *buf, size_t n) {
   if (meters < 0) {
     snprintf(buf, n, "--");
     return;
   }
-  if (meters >= 1000) {
-    float km = meters / 1000.0f;
-    if (km >= 10.0f) {
-      snprintf(buf, n, "%d km", (int)km);
-    } else {
-      snprintf(buf, n, "%.1f km", km);
-    }
+  if (meters > 9999) {
+    snprintf(buf, n, "9999");
   } else {
-    snprintf(buf, n, "%d m", meters);
+    snprintf(buf, n, "%d", meters);
   }
+}
+
+void formatDistance(int meters, char *buf, size_t n) {
+  formatMetersOnly(meters, buf, n);
 }
 
 // Dual-color OLED: yellow band y=0..15, blue band y=16..63.
@@ -418,69 +360,63 @@ void drawStale() {
   drawn.valid = false;
 }
 
-void drawDistCamBand() {
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-
-  if (nav.dist_m >= 0) {
-    char distBuf[16];
-    formatDistance(nav.dist_m, distBuf, sizeof(distBuf));
-    display.setCursor(0, 4);
-    display.print(distBuf);
-  } else if (nav.street[0]) {
-    // Нет дистанции до манёвра в 2ГИС-нотификации — показываем улицу
-    display.setCursor(0, 4);
-    display.print(nav.street);
-  } else {
-    display.setCursor(0, 4);
-    display.print(F("--"));
+/** Жёлтый сектор (y=0..15): тишина без камеры; с камерой — мигание + скорость. */
+void drawYellowCameraBand() {
+  display.fillRect(0, 0, SCREEN_W, BLUE_TOP, SSD1306_BLACK);
+  if (!nav.camera) {
+    return;
   }
-
-  if (nav.camera) {
-    char camBuf[20];
-    if (nav.cam_m >= 0) {
-      char cm[12];
-      formatDistance(nav.cam_m, cm, sizeof(cm));
-      snprintf(camBuf, sizeof(camBuf), "CAM %s", cm);
-    } else {
-      snprintf(camBuf, sizeof(camBuf), "CAM");
-    }
+  if (!camBlinkOn) {
+    return;
+  }
+  display.setTextColor(SSD1306_WHITE);
+  char buf[16];
+  if (nav.cam_kmh > 0) {
+    snprintf(buf, sizeof(buf), "%d", nav.cam_kmh);
+    display.setTextSize(2);
     int16_t x1, y1;
     uint16_t w, h;
-    display.getTextBounds(camBuf, 0, 0, &x1, &y1, &w, &h);
-    display.setCursor(SCREEN_W - (int)w, 4);
-    display.print(camBuf);
-  }
-}
-
-static bool iconTooDense(const uint8_t *icon, size_t len) {
-  size_t bits = 0;
-  for (size_t i = 0; i < len; i++) {
-    uint8_t v = icon[i];
-    while (v) {
-      bits += v & 1u;
-      v >>= 1;
-    }
-  }
-  // >42% заливки — почти наверняка фон, не стрелка
-  return bits > (len * 8 * 42) / 100;
-}
-
-void drawArrowAndLabel() {
-  display.drawFastHLine(0, 16, SCREEN_W, SSD1306_WHITE);
-  const bool useIcon = nav.has_icon && !iconTooDense(nav.icon, sizeof(nav.icon));
-  if (useIcon) {
-    display.drawBitmap(48, 20, nav.icon, 32, 32, SSD1306_WHITE);
+    display.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_W - (int)w) / 2, 1);
+    display.print(buf);
+  } else if (nav.cam_m >= 0) {
+    snprintf(buf, sizeof(buf), "%dm", nav.cam_m > 9999 ? 9999 : nav.cam_m);
+    display.setTextSize(1);
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_W - (int)w) / 2, 4);
+    display.print(buf);
   } else {
-    display.drawBitmap(48, 20, turnBitmap(nav.turn), 32, 32, SSD1306_WHITE);
+    display.setTextSize(1);
+    display.setCursor(50, 4);
+    display.print(F("CAM"));
   }
-  // Улица важнее слова LEFT/RIGHT — на 2ГИС в баннере именно она
-  const char *label = nav.street[0] ? nav.street : turnLabel(nav.turn);
+}
+
+/** Синий сектор: слева стрелка, справа дистанция + m. */
+void drawBlueManeuverBand() {
+  display.fillRect(0, BLUE_TOP, SCREEN_W, SCREEN_H - BLUE_TOP, SSD1306_BLACK);
+  display.drawFastVLine(BLUE_SPLIT, BLUE_TOP, SCREEN_H - BLUE_TOP, SSD1306_WHITE);
+
+  const int ax = (BLUE_SPLIT - ARROW_W) / 2;
+  const int ay = BLUE_TOP + (SCREEN_H - BLUE_TOP - ARROW_H) / 2;
+  display.drawBitmap(ax, ay, turnBitmap(nav.turn), ARROW_W, ARROW_H, SSD1306_WHITE);
+
+  char num[8];
+  formatMetersOnly(nav.dist_m, num, sizeof(num));
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(2);
   int16_t x1, y1;
   uint16_t w, h;
-  display.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
-  display.setCursor((SCREEN_W - (int)w) / 2, 54);
-  display.print(label);
+  display.getTextBounds(num, 0, 0, &x1, &y1, &w, &h);
+  const int rightCx = BLUE_SPLIT + (SCREEN_W - BLUE_SPLIT) / 2;
+  display.setCursor(rightCx - (int)w / 2, BLUE_TOP + 10);
+  display.print(num);
+  display.setTextSize(1);
+  display.getTextBounds("m", 0, 0, &x1, &y1, &w, &h);
+  display.setCursor(rightCx - (int)w / 2, BLUE_TOP + 34);
+  display.print(F("m"));
 }
 
 void syncDrawnFromNav() {
@@ -489,60 +425,51 @@ void syncDrawnFromNav() {
   drawn.dist_m = nav.dist_m;
   drawn.camera = nav.camera;
   drawn.cam_m = nav.cam_m;
-  drawn.has_icon = nav.has_icon;
-  strncpy(drawn.street, nav.street, sizeof(drawn.street) - 1);
-  drawn.street[sizeof(drawn.street) - 1] = '\0';
-  if (nav.has_icon) {
-    memcpy(drawn.icon, nav.icon, sizeof(drawn.icon));
-  }
+  drawn.cam_kmh = nav.cam_kmh;
+  drawn.cam_blink_on = camBlinkOn;
 }
 
 void drawNavFull() {
   display.clearDisplay();
-  drawDistCamBand();
-  drawArrowAndLabel();
+  drawYellowCameraBand();
+  drawBlueManeuverBand();
   display.display();
   syncDrawnFromNav();
 }
 
-/** Меняем только изменившиеся зоны — быстрее на I2C OLED. */
-void drawNavSmart() {
+void drawNavSmart(bool forceYellow) {
   if (!drawn.valid) {
     drawNavFull();
     return;
   }
 
   const bool distChanged = drawn.dist_m != nav.dist_m;
-  const bool camChanged = drawn.camera != nav.camera || drawn.cam_m != nav.cam_m;
-  const bool iconChanged = drawn.has_icon != nav.has_icon ||
-      (nav.has_icon && memcmp(drawn.icon, nav.icon, sizeof(nav.icon)) != 0);
-  const bool turnChanged = drawn.turn != nav.turn || iconChanged ||
-      strcmp(drawn.street, nav.street) != 0;
+  const bool camChanged = drawn.camera != nav.camera || drawn.cam_m != nav.cam_m ||
+      drawn.cam_kmh != nav.cam_kmh;
+  const bool turnChanged = drawn.turn != nav.turn;
+  const bool blinkChanged = forceYellow && drawn.cam_blink_on != camBlinkOn;
 
-  if (!distChanged && !camChanged && !turnChanged) {
+  if (!distChanged && !camChanged && !turnChanged && !blinkChanged) {
     return;
   }
 
-  if (distChanged || camChanged) {
-    display.fillRect(0, 0, SCREEN_W, 16, SSD1306_BLACK);
-    drawDistCamBand();
+  if (camChanged || blinkChanged) {
+    drawYellowCameraBand();
   }
-  if (turnChanged) {
-    display.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, SSD1306_BLACK);
-    drawArrowAndLabel();
+  if (distChanged || turnChanged) {
+    drawBlueManeuverBand();
   }
   display.display();
   syncDrawnFromNav();
 }
 
-void render() {
+void render(bool forceYellow = false) {
   if (!oledReady) return;
   uint32_t now = millis();
   const bool phoneOn = stationCount() > 0;
 
-  // Пока есть навигационные данные и телефон на SoftAP — фиксируем манёвр
   if (nav.has_data && phoneOn) {
-    drawNavSmart();
+    drawNavSmart(forceYellow);
     return;
   }
 
@@ -558,7 +485,6 @@ void render() {
     return;
   }
 
-  // Данные протухли без телефона уже обработаны выше
   if (phoneOn) {
     drawPhoneConnected(stationCount());
   } else {
@@ -685,10 +611,10 @@ void handleScreen() {
   const uint8_t *buf = display.getBuffer();
   const size_t bufLen = (size_t)SCREEN_W * ((SCREEN_H + 7) / 8); // 1024
 
-  char meta[96];
-  snprintf(meta, sizeof(meta), "turn=%s;dist=%d;cam=%d;street=%s;icon=%d;ver=%s",
-           turnLabel(nav.turn), nav.dist_m, nav.camera ? 1 : 0, nav.street,
-           nav.has_icon ? 1 : 0, FW_VERSION);
+  char meta[120];
+  snprintf(meta, sizeof(meta), "turn=%s;dist=%d;cam=%d;cam_kmh=%d;cam_m=%d;ver=%s",
+           turnLabel(nav.turn), nav.dist_m, nav.camera ? 1 : 0, nav.cam_kmh, nav.cam_m,
+           FW_VERSION);
 
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.sendHeader("X-OLED-W", String(SCREEN_W));
@@ -736,14 +662,17 @@ void handleNav() {
   } else {
     nav.cam_m = -1;
   }
+  if (doc["cam_kmh"].is<int>()) {
+    nav.cam_kmh = doc["cam_kmh"].as<int>();
+  } else {
+    nav.cam_kmh = -1;
+  }
 
+  // Иконки 2ГИС больше не рисуем — только встроенные стрелки нового HUD
   nav.has_icon = false;
   if (doc["icon"].is<const char *>()) {
     const char *hex = doc["icon"];
-    if (parseIconHex(hex, nav.icon, sizeof(nav.icon)) &&
-        !iconTooDense(nav.icon, sizeof(nav.icon))) {
-      nav.has_icon = true;
-    }
+    (void)parseIconHex(hex, nav.icon, sizeof(nav.icon));
   }
 
   if (doc["street"].is<const char *>()) {
@@ -751,7 +680,6 @@ void handleNav() {
     size_t j = 0;
     for (size_t i = 0; s[i] && j + 1 < sizeof(nav.street); i++) {
       unsigned char c = (unsigned char)s[i];
-      // Только печатный ASCII — кириллица UTF-8 на SSD1306 даёт квадраты
       if (c >= 0x20 && c <= 0x7E) {
         nav.street[j++] = (char)c;
       }
@@ -762,15 +690,14 @@ void handleNav() {
   nav.last_update_ms = millis();
   nav.has_data = true;
 
-  Serial.printf("NAV turn=%d dist=%d cam=%d cam_m=%d icon=%d\n",
-                (int)nav.turn, nav.dist_m, nav.camera ? 1 : 0, nav.cam_m,
-                nav.has_icon ? 1 : 0);
+  Serial.printf("NAV turn=%d dist=%d cam=%d cam_kmh=%d cam_m=%d\n",
+                (int)nav.turn, nav.dist_m, nav.camera ? 1 : 0, nav.cam_kmh, nav.cam_m);
   char navMsg[DBG_MSG_LEN];
-  snprintf(navMsg, sizeof(navMsg), "nav t=%d d=%d ic=%d",
-           (int)nav.turn, nav.dist_m, nav.has_icon ? 1 : 0);
+  snprintf(navMsg, sizeof(navMsg), "nav t=%d d=%d ck=%d",
+           (int)nav.turn, nav.dist_m, nav.cam_kmh);
   dbgEsp('i', navMsg);
 
-  render();
+  render(true);
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
@@ -850,6 +777,20 @@ void loop() {
   static bool lastHadNav = false;
   uint32_t now = millis();
 
+  // Мигание жёлтого сектора при камере
+  bool blinkTick = false;
+  if (nav.has_data && nav.camera && (now - lastCamBlinkMs >= CAM_BLINK_MS)) {
+    lastCamBlinkMs = now;
+    camBlinkOn = !camBlinkOn;
+    blinkTick = true;
+  } else if (!nav.camera) {
+    camBlinkOn = true;
+  }
+
+  if (blinkTick) {
+    render(true);
+  }
+
   if (now - lastCheck > 400) {
     lastCheck = now;
     uint8_t stations = stationCount();
@@ -865,9 +806,8 @@ void loop() {
       dbgEsp('i', stMsg);
     }
 
-    // HUD обновляется из POST /nav. Здесь — только phone disconnect / idle.
     if (stationsChanged || navFlagChanged || (nav.has_data && stations == 0)) {
-      render();
+      render(false);
     }
   }
 }

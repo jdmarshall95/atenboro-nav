@@ -25,6 +25,11 @@ object NavParser {
         Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
     )
 
+    private val speedKmhPattern = Pattern.compile(
+        "(?<![\\d])(\\d{2,3})\\s*(?:км/ч|кмч|km/h|kmh)",
+        Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
+    )
+
     private val turnHint = Pattern.compile(
         "налево|направо|влево|вправо|прямо|разворот|кольц|кругов|левее|правее|" +
             "slight|left|right|straight|u-turn|turn|поверните|съезд|держитесь",
@@ -79,16 +84,39 @@ object NavParser {
         } else {
             -1
         }
+        val camKmh = if (camera) extractCamSpeedKmh(cleanTexts) else -1
 
         return NavUpdate(
             turn = turn,
             distM = distM,
             camera = camera,
             camM = if (camera) camM else -1,
+            camKmh = camKmh,
             rawSnippet = joined.take(400),
             allDistances = extractDistancesMeters(joined),
             allTexts = cleanTexts
         )
+    }
+
+    private fun extractCamSpeedKmh(texts: List<String>): Int {
+        for (line in texts) {
+            val m = speedKmhPattern.matcher(line)
+            if (m.find()) {
+                val v = m.group(1)?.toIntOrNull() ?: continue
+                if (v in 5..150) return v
+            }
+        }
+        // Число рядом со словом «камера» без единицы — часто лимит на баннере
+        for (line in texts) {
+            val l = line.lowercase(Locale("ru"))
+            if (!cameraPattern.matcher(l).find()) continue
+            val bare = Pattern.compile("(?<![\\d])(\\d{2,3})(?![\\d.,])").matcher(line)
+            while (bare.find()) {
+                val v = bare.group(1)?.toIntOrNull() ?: continue
+                if (v in 20..130) return v
+            }
+        }
+        return -1
     }
 
     private fun detectTurnPriority(texts: List<String>): String {

@@ -96,6 +96,7 @@ object NavFeed {
                     prev.distM != toSend.distM ||
                     prev.camera != toSend.camera ||
                     prev.camM != toSend.camM ||
+                    prev.camKmh != toSend.camKmh ||
                     prev.iconHex != toSend.iconHex ||
                     prev.street != toSend.street
                 if (t - lastSendAt < THROTTLE_MS) return@withLock
@@ -131,6 +132,7 @@ object NavFeed {
         var street = update.street
         var camera = update.camera
         var camM = update.camM
+        var camKmh = update.camKmh
 
         if (turn == "none" && prev.turn != "none") turn = prev.turn
         // null = поле не пришло (держать sticky); "" = явно сбросить иконку
@@ -144,6 +146,9 @@ object NavFeed {
         if (!camera && prev.camera) {
             camera = true
             camM = prev.camM
+            if (camKmh <= 0) camKmh = prev.camKmh
+        } else if (camera && camKmh <= 0 && prev.camKmh > 0) {
+            camKmh = prev.camKmh
         }
 
         return update.copy(
@@ -153,6 +158,7 @@ object NavFeed {
             street = street,
             camera = camera,
             camM = camM,
+            camKmh = camKmh,
             navigating = navigating || update.navigating
         )
     }
