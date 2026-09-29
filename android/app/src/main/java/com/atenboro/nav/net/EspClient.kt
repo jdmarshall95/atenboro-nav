@@ -95,6 +95,35 @@ class EspClient(
         }
     }
 
+    suspend fun getScreen(context: Context? = null): Result<ScreenCapture> =
+        withContext(Dispatchers.IO) {
+            context?.let { EspNetwork.bindIfReachable(it) }
+            try {
+                val req = Request.Builder().url("$baseUrl/screen").get().build()
+                client.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) {
+                        return@use Result.failure(
+                            IllegalStateException("HTTP ${resp.code}")
+                        )
+                    }
+                    val bytes = resp.body?.bytes() ?: ByteArray(0)
+                    val meta = resp.header("X-OLED-META").orEmpty()
+                    val w = resp.header("X-OLED-W")?.toIntOrNull() ?: 128
+                    val h = resp.header("X-OLED-H")?.toIntOrNull() ?: 64
+                    Result.success(ScreenCapture(w, h, meta, bytes))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    data class ScreenCapture(
+        val width: Int,
+        val height: Int,
+        val meta: String,
+        val buffer: ByteArray
+    )
+
     companion object {
         const val DEFAULT_BASE_URL = "http://${EspNetwork.ESP_HOST}"
     }

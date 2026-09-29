@@ -54,6 +54,26 @@
     </LinearLayout>
 
     <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnScreen"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="8dp"
+        android:text="Снимок OLED с платы"
+        android:textColor="@color/bg"
+        app:backgroundTint="@color/accent"
+        app:cornerRadius="12dp" />
+
+    <ImageView
+        android:id="@+id/oledPreview"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_oled_preview"
+        android:contentDescription="OLED preview"
+        android:padding="8dp"
+        android:scaleType="fitCenter" />
+
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnRefresh"
         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
         android:layout_width="match_parent"

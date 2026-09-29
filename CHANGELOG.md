@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.2] — 2026-09-29
+
+### Fixed
+- OLED Cyrillic garbage: transliterate street to Latin on phone; firmware keeps ASCII-only text
+
+### Added
+- `GET /screen` — raw SSD1306 framebuffer + `X-OLED-META` headers for debug previews
+- Debug UI: button «Снимок OLED с платы» + PNG save under app files/debug
+- `scripts/fetch_oled_screen.sh` for curl → PNG/ASCII from SoftAP
+
 ## [0.1.1] — 2026-09-29
 
 ### Added
