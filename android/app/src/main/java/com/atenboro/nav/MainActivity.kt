@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity() {
 
         requestNotifPermission()
         requestWifiPermissions()
+        handleInjectIntent(intent)
 
         binding.btnConnectEsp.setOnClickListener {
             lifecycleScope.launch {
@@ -153,6 +154,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleInjectIntent(intent)
+    }
+
+    /** adb: am start -n com.atenboro.nav/.MainActivity --es turn right --ei dist_m 350 --ez camera true --ei cam_m 180 --es street Sayanskaya */
+    private fun handleInjectIntent(intent: Intent?) {
+        if (intent?.action != ACTION_INJECT_NAV && intent?.hasExtra("turn") != true) return
+        val turn = intent.getStringExtra("turn") ?: return
+        val dist = intent.getIntExtra("dist_m", -1)
+        val camera = intent.getBooleanExtra("camera", false)
+        val camM = intent.getIntExtra("cam_m", -1)
+        val street = intent.getStringExtra("street")
+        val icon = intent.getStringExtra("icon")
+            ?: com.atenboro.nav.parse.ManeuverIconClassifier.fallbackGlyphHex(turn)
+        lifecycleScope.launch {
+            EspNetwork.bindIfReachable(this@MainActivity)
+            val update = NavUpdate(
+                turn = turn,
+                distM = dist,
+                camera = camera,
+                camM = camM,
+                street = street,
+                iconHex = icon,
+                navigating = true
+            )
+            val result = esp.sendNav(update, this@MainActivity)
+            debugStore.info(
+                if (result.isSuccess) "inject sent $turn ${dist}m"
+                else "inject fail: ${result.exceptionOrNull()?.message}"
+            )
+            if (result.isSuccess) NavBus.publish(update.copy(httpStatus = "OK"))
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         refreshA11yLabel()
@@ -235,5 +271,9 @@ class MainActivity : AppCompatActivity() {
         if (needed.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1002)
         }
+    }
+
+    companion object {
+        const val ACTION_INJECT_NAV = "com.atenboro.nav.INJECT_NAV"
     }
 }
