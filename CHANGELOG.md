@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.5] — 2026-09-29
+
+### Fixed
+- OLED arrows: replace chunky “plunger” glyphs with classic chevrons (40×40, padded) so they are not cropped in the left blue half
+
 ## [0.1.4] — 2026-09-29
 
 ### Changed

@@ -399,6 +399,7 @@ void drawBlueManeuverBand() {
   display.fillRect(0, BLUE_TOP, SCREEN_W, SCREEN_H - BLUE_TOP, SSD1306_BLACK);
   display.drawFastVLine(BLUE_SPLIT, BLUE_TOP, SCREEN_H - BLUE_TOP, SSD1306_WHITE);
 
+  // Отступ от разделителя и краёв, чтобы стрелку не кропало
   const int ax = (BLUE_SPLIT - ARROW_W) / 2;
   const int ay = BLUE_TOP + (SCREEN_H - BLUE_TOP - ARROW_H) / 2;
   display.drawBitmap(ax, ay, turnBitmap(nav.turn), ARROW_W, ARROW_H, SSD1306_WHITE);
