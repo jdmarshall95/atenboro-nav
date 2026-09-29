@@ -1,0 +1,146 @@
+package com.atenboro.nav.parse
+
+import com.atenboro.nav.model.NavUpdate
+import java.util.Locale
+import java.util.regex.Pattern
+
+/**
+ * Парсер подсказок 2ГИС из accessibility / notification RemoteViews.
+ * Отфильтровывает длину всего маршрута ("17 км • 25 мин").
+ */
+object NavParser {
+
+    private val distPattern = Pattern.compile(
+        "(?i)(?U)(?<![\\d.,])(\\d{1,4}(?:[.,]\\d)?)\\s*(км|м|km|m)(?![a-zA-Zа-яА-Я0-9])"
+    )
+
+    private val timePattern = Pattern.compile(
+        "(?i)(?U)\\b\\d+\\s*(минут|минуты|мин|часов|часа|час|ч\\.|мин\\.)\\b"
+    )
+
+    private val cameraPattern = Pattern.compile(
+        "камер|camera|radar|радар|контроль\\s*скорост",
+        Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
+    )
+
+    private val turnHint = Pattern.compile(
+        "(?i)(?U)налево|направо|влево|вправо|прямо|разворот|кольц|кругов|левее|правее|" +
+            "slight|left|right|straight|u-turn|turn|поверните|съезд|держитесь"
+    )
+
+    fun parse(texts: List<String>): NavUpdate {
+        val cleanTexts = texts
+            .map { it.replace('\u00A0', ' ').trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+
+        val joined = cleanTexts.joinToString("\n")
+        val lowerAll = joined.lowercase(Locale("ru"))
+
+        // Строки маршрута целиком: "17 км • 25 мин"
+        val routeSummaryLines = cleanTexts.filter { line ->
+            val l = line.lowercase(Locale("ru"))
+            timePattern.matcher(l).find() && distPattern.matcher(l).find()
+        }
+
+        val maneuverLines = cleanTexts.filter { line ->
+            val l = line.lowercase(Locale("ru"))
+            !routeSummaryLines.contains(line) && (
+                turnHint.matcher(l).find() ||
+                    // короткая дистанция без времени — часто баннер манёвра "400 м"
+                    extractDistancesMeters(line).any { it in 0..3_000 }
+                )
+        }
+
+        val turn = detectTurnPriority(maneuverLines.ifEmpty { cleanTexts })
+
+        val maneuverDistances = extractDistancesMeters(maneuverLines.joinToString("\n"))
+            .filter { it <= 5_000 } // отсекаем длину маршрута
+        val fallbackDistances = extractDistancesMeters(
+            cleanTexts.filterNot { routeSummaryLines.contains(it) }.joinToString("\n")
+        ).filter { it <= 5_000 }
+
+        val distM = when {
+            maneuverDistances.isNotEmpty() -> maneuverDistances.minOrNull()!!
+            turn != "none" && fallbackDistances.isNotEmpty() -> fallbackDistances.minOrNull()!!
+            else -> -1
+        }
+
+        val camera = cameraPattern.matcher(lowerAll).find()
+        val camM = if (camera) {
+            val camLine = cleanTexts.firstOrNull {
+                cameraPattern.matcher(it.lowercase(Locale("ru"))).find()
+            }
+            if (camLine != null) extractDistancesMeters(camLine).firstOrNull() ?: -1
+            else -1
+        } else {
+            -1
+        }
+
+        return NavUpdate(
+            turn = turn,
+            distM = distM,
+            camera = camera,
+            camM = if (camera) camM else -1,
+            rawSnippet = joined.take(400),
+            allDistances = extractDistancesMeters(joined),
+            allTexts = cleanTexts
+        )
+    }
+
+    private fun detectTurnPriority(texts: List<String>): String {
+        val lowerLines = texts.map { it.lowercase(Locale("ru")) }
+
+        for (line in lowerLines) {
+            when {
+                line.contains("разворот") || line.contains("u-turn") || line.contains("разверн") ->
+                    return "u_turn"
+                line.contains("кольцев") || line.contains("кругов") || line.contains("roundabout") ->
+                    return "roundabout"
+                line.contains("прибыл") || line.contains("назначен") || line.contains("финиш") ||
+                    line.contains("прибытие") || line.contains("arrive") ->
+                    return "arrive"
+                line.contains("чуть лев") || line.contains("плавно лев") || line.contains("slight left") ||
+                    line.contains("левее") || line.contains("держитесь левее") ->
+                    return "slight_left"
+                line.contains("чуть прав") || line.contains("плавно прав") || line.contains("slight right") ||
+                    line.contains("правее") || line.contains("держитесь правее") ->
+                    return "slight_right"
+                line.contains("налево") || line.contains("влево") ||
+                    line.contains("поверните налево") || line.contains("turn left") ->
+                    return "left"
+                line.contains("направо") || line.contains("вправо") ||
+                    line.contains("поверните направо") || line.contains("turn right") ->
+                    return "right"
+                // "лево"/"право" без контекста слишком шумные — не используем голыми
+            }
+        }
+
+        for (line in lowerLines) {
+            if (line.contains("прямо") || line.contains("продолж") || line.contains("straight") ||
+                line.contains("следуйте")
+            ) {
+                return "straight"
+            }
+        }
+
+        return "none"
+    }
+
+    private fun extractDistancesMeters(text: String): List<Int> {
+        if (text.isBlank()) return emptyList()
+        val out = mutableListOf<Int>()
+        val matcher = distPattern.matcher(text)
+        while (matcher.find()) {
+            val raw = matcher.group(1)?.replace(',', '.') ?: continue
+            val unit = matcher.group(2)?.lowercase(Locale.ROOT) ?: continue
+            val value = raw.toDoubleOrNull() ?: continue
+            val meters = when {
+                unit.startsWith("к") || unit == "km" -> (value * 1000).toInt()
+                else -> value.toInt()
+            }
+            if (meters in 0..200_000) out += meters
+        }
+        return out
+    }
+}
