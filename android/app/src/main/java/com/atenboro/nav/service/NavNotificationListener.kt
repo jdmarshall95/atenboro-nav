@@ -87,9 +87,10 @@ class NavNotificationListener : NotificationListenerService() {
                 val cleanTexts = texts.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
                 val parsed = NavParser.parse(cleanTexts)
 
+                // largeIcon обычно самый крупный — сортируем по площади
+                val ordered = bitmaps.sortedByDescending { it.width * it.height }
                 var bestIcon: ManeuverIconClassifier.Result? = null
-                // largeIcon обычно последний и самый надёжный — обходим с конца
-                for (bmp in bitmaps.asReversed()) {
+                for (bmp in ordered) {
                     val r = ManeuverIconClassifier.analyze(bmp)
                     if (r.turn != "none") {
                         bestIcon = r
