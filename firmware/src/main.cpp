@@ -5,6 +5,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ArduinoJson.h>
+#include <string.h>
 #include "splash_bmp.h"
 #include "debug_log.h"
 #include "version.h"
@@ -19,7 +20,9 @@ static bool oledReady = false;
 
 static const char *AP_SSID = "atenboro-nav";
 static const char *AP_PASS = "atenboro1";
-static const uint32_t STALE_MS = 5000;
+// Пока телефон на AP и есть nav — HUD не откатываем на splash/waiting.
+static const uint32_t STALE_MS = 15000;
+static const uint32_t PHONE_GONE_CLEAR_MS = 20000;
 
 Adafruit_SSD1306 display(SCREEN_W, SCREEN_H, &Wire, -1);
 ESP8266WebServer server(80);
@@ -43,9 +46,24 @@ struct NavState {
   int cam_m = -1;
   uint32_t last_update_ms = 0;
   bool has_data = false;
+  bool has_icon = false;
+  uint8_t icon[128]; // 32x32 mono
+  char street[28];
+};
+
+struct DrawnNav {
+  bool valid = false;
+  Turn turn = Turn::None;
+  int dist_m = -999;
+  bool camera = false;
+  int cam_m = -999;
+  bool has_icon = false;
+  uint8_t icon[128];
+  char street[28];
 };
 
 NavState nav;
+DrawnNav drawn;
 
 // 32x32 arrow bitmaps (1 bit per pixel, MSB left)
 static const uint8_t BMP_LEFT[] PROGMEM = {
@@ -284,6 +302,7 @@ void drawWaiting() {
   display.setCursor(10, 48);
   display.print(F("AP: atenboro-nav"));
   display.display();
+  drawn.valid = false;
 }
 
 void drawPhoneConnected(uint8_t stations) {
@@ -305,6 +324,7 @@ void drawPhoneConnected(uint8_t stations) {
   display.setCursor((SCREEN_W - (int)w) / 2, 52);
   display.print(buf);
   display.display();
+  drawn.valid = false;
 }
 
 uint8_t stationCount() {
@@ -395,18 +415,26 @@ void drawStale() {
   display.setCursor(28, 40);
   display.print(F("no update"));
   display.display();
+  drawn.valid = false;
 }
 
-void drawNav() {
-  display.clearDisplay();
-
-  // Top band (yellow physical strip on 0.96" dual-color OLEDs): y 0..15
-  char distBuf[16];
-  formatDistance(nav.dist_m, distBuf, sizeof(distBuf));
+void drawDistCamBand() {
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 4);
-  display.print(distBuf);
+
+  if (nav.dist_m >= 0) {
+    char distBuf[16];
+    formatDistance(nav.dist_m, distBuf, sizeof(distBuf));
+    display.setCursor(0, 4);
+    display.print(distBuf);
+  } else if (nav.street[0]) {
+    // Нет дистанции до манёвра в 2ГИС-нотификации — показываем улицу
+    display.setCursor(0, 4);
+    display.print(nav.street);
+  } else {
+    display.setCursor(0, 4);
+    display.print(F("--"));
+  }
 
   if (nav.camera) {
     char camBuf[20];
@@ -423,20 +451,73 @@ void drawNav() {
     display.setCursor(SCREEN_W - (int)w, 4);
     display.print(camBuf);
   }
+}
 
+void drawArrowAndLabel() {
   display.drawFastHLine(0, 16, SCREEN_W, SSD1306_WHITE);
-
-  // Arrow + label in blue zone
-  display.drawBitmap(48, 20, turnBitmap(nav.turn), 32, 32, SSD1306_WHITE);
-
+  if (nav.has_icon) {
+    display.drawBitmap(48, 20, nav.icon, 32, 32, SSD1306_WHITE);
+  } else {
+    display.drawBitmap(48, 20, turnBitmap(nav.turn), 32, 32, SSD1306_WHITE);
+  }
   const char *label = turnLabel(nav.turn);
   int16_t x1, y1;
   uint16_t w, h;
   display.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
   display.setCursor((SCREEN_W - (int)w) / 2, 54);
   display.print(label);
+}
 
+void syncDrawnFromNav() {
+  drawn.valid = true;
+  drawn.turn = nav.turn;
+  drawn.dist_m = nav.dist_m;
+  drawn.camera = nav.camera;
+  drawn.cam_m = nav.cam_m;
+  drawn.has_icon = nav.has_icon;
+  strncpy(drawn.street, nav.street, sizeof(drawn.street) - 1);
+  drawn.street[sizeof(drawn.street) - 1] = '\0';
+  if (nav.has_icon) {
+    memcpy(drawn.icon, nav.icon, sizeof(drawn.icon));
+  }
+}
+
+void drawNavFull() {
+  display.clearDisplay();
+  drawDistCamBand();
+  drawArrowAndLabel();
   display.display();
+  syncDrawnFromNav();
+}
+
+/** Меняем только изменившиеся зоны — быстрее на I2C OLED. */
+void drawNavSmart() {
+  if (!drawn.valid) {
+    drawNavFull();
+    return;
+  }
+
+  const bool distChanged = drawn.dist_m != nav.dist_m ||
+      strcmp(drawn.street, nav.street) != 0;
+  const bool camChanged = drawn.camera != nav.camera || drawn.cam_m != nav.cam_m;
+  const bool iconChanged = drawn.has_icon != nav.has_icon ||
+      (nav.has_icon && memcmp(drawn.icon, nav.icon, sizeof(nav.icon)) != 0);
+  const bool turnChanged = drawn.turn != nav.turn || iconChanged;
+
+  if (!distChanged && !camChanged && !turnChanged) {
+    return;
+  }
+
+  if (distChanged || camChanged) {
+    display.fillRect(0, 0, SCREEN_W, 16, SSD1306_BLACK);
+    drawDistCamBand();
+  }
+  if (turnChanged) {
+    display.fillRect(0, 16, SCREEN_W, SCREEN_H - 16, SSD1306_BLACK);
+    drawArrowAndLabel();
+  }
+  display.display();
+  syncDrawnFromNav();
 }
 
 void render() {
@@ -444,26 +525,51 @@ void render() {
   uint32_t now = millis();
   const bool phoneOn = stationCount() > 0;
 
-  if (nav.has_data && (now - nav.last_update_ms <= STALE_MS)) {
-    drawNav();
+  // Пока есть навигационные данные и телефон на SoftAP — фиксируем манёвр
+  if (nav.has_data && phoneOn) {
+    drawNavSmart();
     return;
   }
 
-  // Had nav but updates stopped — while phone still on AP, hint reconnect/app
   if (nav.has_data && !phoneOn) {
-    drawStale();
-    return;
-  }
-  if (nav.has_data && phoneOn && (now - nav.last_update_ms > STALE_MS)) {
-    drawPhoneConnected(stationCount());
+    if (now - nav.last_update_ms > PHONE_GONE_CLEAR_MS) {
+      nav.has_data = false;
+      nav.has_icon = false;
+      drawn.valid = false;
+      drawWaiting();
+    } else {
+      drawStale();
+    }
     return;
   }
 
+  // Данные протухли без телефона уже обработаны выше
   if (phoneOn) {
     drawPhoneConnected(stationCount());
   } else {
     drawWaiting();
   }
+  drawn.valid = false;
+}
+
+static int hexNibble(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
+static bool parseIconHex(const char *hex, uint8_t *out, size_t outLen) {
+  if (!hex) return false;
+  size_t n = strlen(hex);
+  if (n != outLen * 2) return false;
+  for (size_t i = 0; i < outLen; i++) {
+    int hi = hexNibble(hex[i * 2]);
+    int lo = hexNibble(hex[i * 2 + 1]);
+    if (hi < 0 || lo < 0) return false;
+    out[i] = (uint8_t)((hi << 4) | lo);
+  }
+  return true;
 }
 
 void handleRoot() {
@@ -591,14 +697,28 @@ void handleNav() {
     nav.cam_m = -1;
   }
 
+  if (doc["icon"].is<const char *>()) {
+    const char *hex = doc["icon"];
+    if (parseIconHex(hex, nav.icon, sizeof(nav.icon))) {
+      nav.has_icon = true;
+    }
+  }
+
+  if (doc["street"].is<const char *>()) {
+    const char *s = doc["street"];
+    strncpy(nav.street, s, sizeof(nav.street) - 1);
+    nav.street[sizeof(nav.street) - 1] = '\0';
+  }
+
   nav.last_update_ms = millis();
   nav.has_data = true;
 
-  Serial.printf("NAV turn=%d dist=%d cam=%d cam_m=%d\n",
-                (int)nav.turn, nav.dist_m, nav.camera ? 1 : 0, nav.cam_m);
+  Serial.printf("NAV turn=%d dist=%d cam=%d cam_m=%d icon=%d\n",
+                (int)nav.turn, nav.dist_m, nav.camera ? 1 : 0, nav.cam_m,
+                nav.has_icon ? 1 : 0);
   char navMsg[DBG_MSG_LEN];
-  snprintf(navMsg, sizeof(navMsg), "nav t=%d d=%d cam=%d",
-           (int)nav.turn, nav.dist_m, nav.camera ? 1 : 0);
+  snprintf(navMsg, sizeof(navMsg), "nav t=%d d=%d ic=%d",
+           (int)nav.turn, nav.dist_m, nav.has_icon ? 1 : 0);
   dbgEsp('i', navMsg);
 
   render();
@@ -677,17 +797,16 @@ void loop() {
 
   static uint32_t lastCheck = 0;
   static uint8_t lastStations = 255;
-  static bool lastHadFreshNav = false;
+  static bool lastHadNav = false;
   uint32_t now = millis();
 
   if (now - lastCheck > 400) {
     lastCheck = now;
     uint8_t stations = stationCount();
-    const bool freshNav = nav.has_data && (now - nav.last_update_ms <= STALE_MS);
     const bool stationsChanged = stations != lastStations;
-    const bool navBecameStale = lastHadFreshNav && !freshNav;
+    const bool navFlagChanged = lastHadNav != nav.has_data;
     lastStations = stations;
-    lastHadFreshNav = freshNav;
+    lastHadNav = nav.has_data;
 
     if (stationsChanged) {
       Serial.printf("SoftAP stations=%u\n", stations);
@@ -696,9 +815,8 @@ void loop() {
       dbgEsp('i', stMsg);
     }
 
-    // OLED HUD обновляется из POST /nav.
-    // Здесь только смена статуса phone/waiting/stale — без лишней перерисовки.
-    if (stationsChanged || navBecameStale || !freshNav) {
+    // HUD обновляется из POST /nav. Здесь — только phone disconnect / idle.
+    if (stationsChanged || navFlagChanged || (nav.has_data && stations == 0)) {
       render();
     }
   }

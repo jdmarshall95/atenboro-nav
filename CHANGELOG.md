@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.1] — 2026-09-29
+
+### Added
+- Maneuver from 2GIS notification `largeIcon` (classify + 32×32 mono to OLED)
+- Sticky nav HUD while navigating; partial OLED redraws (dirty regions only)
+- Accessibility screenshot crop of maneuver card; `canTakeScreenshot`
+- `GisLogcatWatcher` / `GisLogParser` for DomainSynthesizer voice clips (`…Over400`)
+- Street name on OLED when distance-to-maneuver is missing
+
+### Fixed
+- Do not fall back to splash/waiting while phone is on SoftAP and nav data exists
+- Prefer notification icon over noisy HUD scan; filter RemoteViews reflection junk
+
+### Notes
+- Near a turn, 2GIS notification text becomes `350 m — Street` (usable distance)
+- On-disk 2GIS logs are under `Android/data/ru.dublgis…/files/logs/` (app cannot read; use logcat + READ_LOGS)
+
 ## [0.1.0] — 2026-09-29
 
 ### Added

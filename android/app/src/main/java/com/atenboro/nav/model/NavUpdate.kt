@@ -9,12 +9,26 @@ data class NavUpdate(
     val rawSnippet: String = "",
     val allDistances: List<Int> = emptyList(),
     val allTexts: List<String> = emptyList(),
+    /** 32×32 mono icon as hex (128 bytes) — точная стрелка 2ГИС */
+    val iconHex: String? = null,
+    val street: String? = null,
+    val navigating: Boolean = false,
     val httpStatus: String = "Ожидание",
     val lastError: String? = null
 ) {
     fun toJson(): String {
         val cam = if (camera) "true" else "false"
-        return """{"turn":"$turn","dist_m":$distM,"camera":$cam,"cam_m":$camM,"ts":$ts}"""
+        val sb = StringBuilder(160 + (iconHex?.length ?: 0))
+        sb.append("""{"turn":"$turn","dist_m":$distM,"camera":$cam,"cam_m":$camM,"ts":$ts""")
+        if (!iconHex.isNullOrEmpty()) {
+            sb.append(""","icon_w":32,"icon_h":32,"icon":"$iconHex"""")
+        }
+        if (!street.isNullOrBlank()) {
+            val safe = street.replace("\\", "\\\\").replace("\"", "\\\"")
+            sb.append(""","street":"$safe"""")
+        }
+        sb.append('}')
+        return sb.toString()
     }
 
     fun previewText(): String {

@@ -1,6 +1,7 @@
 package com.atenboro.nav.service
 
 import android.accessibilityservice.AccessibilityService
+import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
@@ -8,6 +9,8 @@ import com.atenboro.nav.NavBus
 import com.atenboro.nav.debug.DebugDump
 import com.atenboro.nav.debug.DebugStore
 import com.atenboro.nav.nav.NavFeed
+import com.atenboro.nav.parse.ManeuverHudScanner
+import com.atenboro.nav.parse.ManeuverIconClassifier
 import com.atenboro.nav.parse.NavParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,12 +20,15 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.concurrent.Executors
 
 class NavAccessibilityService : AccessibilityService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val shotExecutor = Executors.newSingleThreadExecutor()
     private lateinit var debugStore: DebugStore
     private var dumpJob: Job? = null
+    @Volatile private var lastHudTurn: String = "none"
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -38,15 +44,36 @@ class NavAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         val pkg = event.packageName?.toString().orEmpty()
-        // События 2ГИС + иногда системные нотификации
         val from2gis = pkg.startsWith("ru.dublgis")
         val fromNotifShade = pkg == "com.android.systemui"
         if (!from2gis && !fromNotifShade) return
 
         val texts = collectTwoGisTexts()
-        if (texts.isEmpty()) return
-        val parsed = NavParser.parse(texts)
-        NavFeed.publish(this, parsed, "a11y")
+        if (texts.isNotEmpty()) {
+            val parsed = NavParser.parse(texts)
+            val update = parsed.copy(navigating = true)
+            NavFeed.publish(this, update, "a11y")
+        }
+
+        // Манёвр рисуется на Qt/OpenGL — скрин карточки слева сверху
+        if (from2gis && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            ManeuverHudScanner.maybeScan(this, shotExecutor) { result ->
+                if (result.turn == "none" && result.mono32 == null) return@maybeScan
+                if (result.turn == lastHudTurn && result.turn != "none") {
+                    // всё равно периодически обновим через notif heartbeat; здесь только смена
+                }
+                lastHudTurn = result.turn
+                val iconHex = result.mono32?.let { ManeuverIconClassifier.monoToHex(it) }
+                val fromTexts = if (texts.isNotEmpty()) NavParser.parse(texts) else null
+                val update = (fromTexts ?: com.atenboro.nav.model.NavUpdate()).copy(
+                    turn = if (result.turn != "none") result.turn else (fromTexts?.turn ?: "none"),
+                    iconHex = iconHex,
+                    navigating = true,
+                    allTexts = fromTexts?.allTexts ?: texts
+                )
+                NavFeed.publish(applicationContext, update, "a11y/hud")
+            }
+        }
     }
 
     override fun onInterrupt() {
@@ -57,10 +84,10 @@ class NavAccessibilityService : AccessibilityService() {
         NavBus.setA11yConnected(false)
         dumpJob?.cancel()
         scope.cancel()
+        shotExecutor.shutdownNow()
         super.onDestroy()
     }
 
-    /** Ищем окна именно 2ГИС, а не активное окно Atenboro. */
     private fun collectTwoGisTexts(): List<String> {
         val out = mutableListOf<String>()
         val wins: List<AccessibilityWindowInfo> = try {
@@ -81,7 +108,6 @@ class NavAccessibilityService : AccessibilityService() {
         }
 
         if (out.isEmpty()) {
-            // fallback: active window only if это 2ГИС
             val root = rootInActiveWindow
             if (root != null) {
                 try {

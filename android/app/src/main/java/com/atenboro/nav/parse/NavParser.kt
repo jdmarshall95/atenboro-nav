@@ -11,11 +11,13 @@ import java.util.regex.Pattern
 object NavParser {
 
     private val distPattern = Pattern.compile(
-        "(?i)(?U)(?<![\\d.,])(\\d{1,4}(?:[.,]\\d)?)\\s*(км|м|km|m)(?![a-zA-Zа-яА-Я0-9])"
+        "(?<![\\d.,])(\\d{1,4}(?:[.,]\\d)?)\\s*(км|м|km|m)(?![a-zA-Zа-яА-Я0-9])",
+        Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
     )
 
     private val timePattern = Pattern.compile(
-        "(?i)(?U)\\b\\d+\\s*(минут|минуты|мин|часов|часа|час|ч\\.|мин\\.)\\b"
+        "\\b\\d+\\s*(минут|минуты|мин|часов|часа|час|ч\\.|мин\\.)\\b",
+        Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
     )
 
     private val cameraPattern = Pattern.compile(
@@ -24,8 +26,9 @@ object NavParser {
     )
 
     private val turnHint = Pattern.compile(
-        "(?i)(?U)налево|направо|влево|вправо|прямо|разворот|кольц|кругов|левее|правее|" +
-            "slight|left|right|straight|u-turn|turn|поверните|съезд|держитесь"
+        "налево|направо|влево|вправо|прямо|разворот|кольц|кругов|левее|правее|" +
+            "slight|left|right|straight|u-turn|turn|поверните|съезд|держитесь",
+        Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
     )
 
     fun parse(texts: List<String>): NavUpdate {
@@ -112,7 +115,6 @@ object NavParser {
                 line.contains("направо") || line.contains("вправо") ||
                     line.contains("поверните направо") || line.contains("turn right") ->
                     return "right"
-                // "лево"/"право" без контекста слишком шумные — не используем голыми
             }
         }
 

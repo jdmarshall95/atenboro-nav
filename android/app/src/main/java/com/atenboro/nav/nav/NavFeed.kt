@@ -15,12 +15,14 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Единая точка публикации HUD на ESP.
- * Шлём только полезные апдейты + редкий heartbeat полезного состояния.
+ * Пока идёт навигация — держим манёвр на плате heartbeat'ом (не откатываем на splash).
+ * Приоритет: notif (largeIcon) > a11y/hud скрин.
  */
 object NavFeed {
     private const val TAG = "AtenboroNavFeed"
-    private const val THROTTLE_MS = 400L
-    private const val HEARTBEAT_MS = 2500L
+    private const val THROTTLE_MS = 350L
+    private const val HEARTBEAT_MS = 2000L
+    private const val HUD_DEFER_MS = 8000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val esp = EspClient()
@@ -29,60 +31,124 @@ object NavFeed {
     @Volatile private var lastSent: NavUpdate? = null
     @Volatile private var lastSendAt = 0L
     @Volatile private var lastLogAt = 0L
+    @Volatile private var navigating = false
+    @Volatile private var lastNotifIconAt = 0L
 
     fun isUseful(u: NavUpdate): Boolean {
+        if (u.navigating && (u.turn != "none" || !u.iconHex.isNullOrEmpty())) return true
         if (u.camera) return true
         if (u.turn != "none") return true
-        // Короткий маневр без явного слова поворота всё же полезен
+        if (!u.iconHex.isNullOrEmpty()) return true
         if (u.distM in 0..2_500) return true
         return false
     }
 
+    fun clearNavigating(context: Context, source: String) {
+        navigating = false
+        lastNotifIconAt = 0L
+        DebugStore.get(context).info("$source nav ended")
+    }
+
     fun publish(context: Context, update: NavUpdate, source: String) {
         val store = DebugStore.get(context)
-        NavBus.publish(update)
+        if (update.navigating) navigating = true
+
+        if (source.startsWith("notif") && (!update.iconHex.isNullOrEmpty() || update.turn != "none")) {
+            lastNotifIconAt = System.currentTimeMillis()
+        }
+
+        // HUD-скрин не перебивает свежий notif-манёвр
+        if (source.contains("hud") && System.currentTimeMillis() - lastNotifIconAt < HUD_DEFER_MS) {
+            val prev = lastSent
+            if (prev != null && (prev.turn != "none" || !prev.iconHex.isNullOrEmpty())) {
+                return
+            }
+        }
+
+        val merged = mergeSticky(update)
+        NavBus.publish(merged)
 
         val now = System.currentTimeMillis()
         if (now - lastLogAt > 3_000) {
             lastLogAt = now
-            val sample = update.allTexts.take(6).joinToString(" | ").take(120)
-            store.info("$source parse turn=${update.turn} d=${update.distM} texts=$sample")
+            val sample = merged.allTexts.take(4).joinToString(" | ").take(100)
+            store.info(
+                "$source turn=${merged.turn} d=${merged.distM} icon=${!merged.iconHex.isNullOrEmpty()} " +
+                    "nav=${merged.navigating} texts=$sample"
+            )
         }
 
-        if (!isUseful(update)) {
-            // Не забиваем OLED мусором вроде "17 км" без манёвра
+        if (!isUseful(merged) && !(navigating && lastSent != null)) {
             return
         }
+
+        val toSend = if (isUseful(merged)) merged else lastSent!!.copy(
+            navigating = true,
+            ts = System.currentTimeMillis() / 1000
+        )
 
         scope.launch {
             mutex.withLock {
                 val t = System.currentTimeMillis()
                 val prev = lastSent
                 val changed = prev == null ||
-                    prev.turn != update.turn ||
-                    prev.distM != update.distM ||
-                    prev.camera != update.camera ||
-                    prev.camM != update.camM
+                    prev.turn != toSend.turn ||
+                    prev.distM != toSend.distM ||
+                    prev.camera != toSend.camera ||
+                    prev.camM != toSend.camM ||
+                    prev.iconHex != toSend.iconHex ||
+                    prev.street != toSend.street
                 if (t - lastSendAt < THROTTLE_MS) return@withLock
                 if (!changed && t - lastSendAt < HEARTBEAT_MS) return@withLock
 
-                lastSent = update
+                lastSent = toSend
                 lastSendAt = t
-                val result = esp.sendNav(update, context)
+                val result = esp.sendNav(toSend, context)
                 if (result.isFailure) {
                     Log.w(TAG, "send fail: ${result.exceptionOrNull()?.message}")
                     store.error("$source send fail: ${result.exceptionOrNull()?.message}")
                     NavBus.publish(
-                        update.copy(
+                        toSend.copy(
                             httpStatus = "ошибка",
                             lastError = result.exceptionOrNull()?.message
                         )
                     )
                 } else {
-                    if (changed) store.info("$source sent ${update.turn} ${update.distM}m")
-                    NavBus.publish(update.copy(httpStatus = "OK", lastError = null))
+                    if (changed) store.info("$source sent ${toSend.turn} ${toSend.distM}m")
+                    NavBus.publish(toSend.copy(httpStatus = "OK", lastError = null))
                 }
             }
         }
+    }
+
+    private fun mergeSticky(update: NavUpdate): NavUpdate {
+        val prev = lastSent ?: return update
+        if (!navigating && !update.navigating) return update
+
+        var turn = update.turn
+        var icon = update.iconHex
+        var dist = update.distM
+        var street = update.street
+        var camera = update.camera
+        var camM = update.camM
+
+        if (turn == "none" && prev.turn != "none") turn = prev.turn
+        if (icon.isNullOrEmpty() && !prev.iconHex.isNullOrEmpty()) icon = prev.iconHex
+        if (dist < 0 && prev.distM >= 0) dist = prev.distM
+        if (street.isNullOrBlank() && !prev.street.isNullOrBlank()) street = prev.street
+        if (!camera && prev.camera) {
+            camera = true
+            camM = prev.camM
+        }
+
+        return update.copy(
+            turn = turn,
+            iconHex = icon,
+            distM = dist,
+            street = street,
+            camera = camera,
+            camM = camM,
+            navigating = navigating || update.navigating
+        )
     }
 }
