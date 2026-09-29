@@ -29,45 +29,60 @@
 
 ## Приложение Android
 
+Реальные скриншоты с Pixel.
+
 ### Главный экран
 
 <p align="center">
-  <img src="docs/screens/app-main-annotated.png" alt="Главный экран Atenboro Nav с пояснениями" width="920" />
+  <img src="docs/screens/app-main-annotated.png" alt="Главный экран — верх" width="900" />
 </p>
 
 | # | Элемент | Зачем |
 |---|---------|--------|
-| 1 | Шапка | Бренд и схема «2ГИС → OLED» |
-| 2 | Статус ESP | Зелёный — SoftAP/`/health` ок; красный — нет связи |
-| 3 | **Подключить к плате** | `bindProcessToNetwork` на `atenboro-nav` (иначе HTTP уйдёт в LTE) |
-| 4 | Статус Accessibility | Служба читает окна/HUD 2ГИС |
-| 5 | Превью OLED | Что ушло на плату: поворот, метры, камера, HTTP |
-| 6 | Parser debug | Сырой разбор 2ГИС (тексты, дистанции, манёвр) |
-| 7 | Копировать / Dump | Буфер обмена или снимок a11y-дерева |
+| 1 | Шапка | Бренд и схема 2ГИС → OLED |
+| 2 | Статус ESP | SoftAP / HTTP до платы |
+| 3 | **Подключить к плате** | `bindProcessToNetwork` на `atenboro-nav` |
+| 4 | Accessibility | Чтение окон/HUD 2ГИС |
+| 5 | Превью OLED | Поворот, метры, камера, HTTP |
+| 6 | Parser debug | Сырой разбор 2ГИС |
+| 7 | Копировать / Dump | Буфер обмена или dump a11y |
 | 8 | **Включить Accessibility** | Системные настройки службы |
-| 9 | **Уведомления 2ГИС** | Notification Listener — основной канал **в кармане** |
-| 10 | **Прокси-сервис** | FGS: процесс, SoftAP-bind, logcat-watcher |
-| 11 | Тест OLED | Образец left/250 м/камера без 2ГИС |
-| 12 | **Debug: лог ↔ плата** | Синхрон логов и снимок framebuffer |
 
-Типичный порядок: **3 → 8 → 9 → 10 → навигация в 2ГИС**.
+<p align="center">
+  <img src="docs/screens/app-main-actions-annotated.png" alt="Главный экран — кнопки" width="900" />
+</p>
+
+| # | Элемент | Зачем |
+|---|---------|--------|
+| 4 | **Включить Accessibility** | Системные настройки a11y |
+| 5 | **Уведомления 2ГИС** | Карманный режим (экран off) |
+| 6 | **Прокси-сервис** | FGS: процесс, SoftAP-bind, logcat |
+| 7 | Тест OLED | Образец на плату без 2ГИС |
+| 8 | **Debug: лог ↔ плата** | Синхрон логов и `/screen` |
+
+Типичный порядок: **Подключить к плате → Accessibility → уведомления → прокси → навигация в 2ГИС**.
+
+<p align="center">
+  <img src="docs/screens/app-main-top.png" width="260" alt="верх" />
+  <img src="docs/screens/app-main-mid.png" width="260" alt="кнопки" />
+  <img src="docs/screens/app-main-bot.png" width="260" alt="низ" />
+</p>
 
 ### Debug ↔ ESP
 
 <p align="center">
-  <img src="docs/screens/app-debug-annotated.png" alt="Экран Debug с пояснениями" width="900" />
+  <img src="docs/screens/app-debug-annotated.png" alt="Debug экран" width="900" />
 </p>
 
 | # | Элемент | Зачем |
 |---|---------|--------|
-| 1 | Заголовок | Экран отладки телефон ↔ плата |
-| 2 | Путь лога | Локальный NDJSON `files/debug/session-….ndjson` |
-| 3 | Синхрон | Тянет `GET /debug` с ESP и мержит в лог |
-| 4 | Очистить плату | `DELETE /debug` на ESP |
-| 5 | Снимок OLED | `GET /screen` + meta-заголовки |
-| 6 | Превью | Декод буфера SSD1306 |
-| 7 | Обновить лог | Перечитать локальные события |
-| 8 | Лента | inject / notif / locked-screen / board |
+| 1 | Заголовок / путь | NDJSON-сессия на телефоне |
+| 2 | Синхрон | `GET /debug` с платы |
+| 3 | Очистить плату | `DELETE /debug` |
+| 4 | Снимок OLED | `GET /screen` + meta |
+| 5 | Превью | Декод SSD1306 |
+| 6 | Обновить лог | Локальные события |
+| 7 | Лента | inject / notif / screen / board |
 
 ## Быстрый старт
 
@@ -83,10 +98,10 @@ SoftAP: `atenboro-nav` / `atenboro1` → `http://192.168.4.1`
 **Android**
 
 1. Установить APK, Wi‑Fi → SoftAP платы.
-2. В приложении: «Подключить к плате» → Accessibility → уведомления → прокси.
+2. «Подключить к плате» → Accessibility → уведомления → прокси.
 3. Навигация в 2ГИС (экран можно блокировать).
 
-Подробный чеклист и тест с заблокированным экраном: [`docs/TESTING.md`](docs/TESTING.md).
+Чеклист и locked-screen тест: [`docs/TESTING.md`](docs/TESTING.md).
 
 ## API платы
 
