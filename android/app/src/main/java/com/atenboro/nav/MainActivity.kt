@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         debugStore = DebugStore.get(this)
         debugStore.info("MainActivity start")
+        com.atenboro.nav.service.GisLogcatWatcher.start(this)
 
         requestNotifPermission()
         requestWifiPermissions()
