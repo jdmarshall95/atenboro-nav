@@ -453,14 +453,29 @@ void drawDistCamBand() {
   }
 }
 
+static bool iconTooDense(const uint8_t *icon, size_t len) {
+  size_t bits = 0;
+  for (size_t i = 0; i < len; i++) {
+    uint8_t v = icon[i];
+    while (v) {
+      bits += v & 1u;
+      v >>= 1;
+    }
+  }
+  // >42% заливки — почти наверняка фон, не стрелка
+  return bits > (len * 8 * 42) / 100;
+}
+
 void drawArrowAndLabel() {
   display.drawFastHLine(0, 16, SCREEN_W, SSD1306_WHITE);
-  if (nav.has_icon) {
+  const bool useIcon = nav.has_icon && !iconTooDense(nav.icon, sizeof(nav.icon));
+  if (useIcon) {
     display.drawBitmap(48, 20, nav.icon, 32, 32, SSD1306_WHITE);
   } else {
     display.drawBitmap(48, 20, turnBitmap(nav.turn), 32, 32, SSD1306_WHITE);
   }
-  const char *label = turnLabel(nav.turn);
+  // Улица важнее слова LEFT/RIGHT — на 2ГИС в баннере именно она
+  const char *label = nav.street[0] ? nav.street : turnLabel(nav.turn);
   int16_t x1, y1;
   uint16_t w, h;
   display.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
@@ -497,12 +512,12 @@ void drawNavSmart() {
     return;
   }
 
-  const bool distChanged = drawn.dist_m != nav.dist_m ||
-      strcmp(drawn.street, nav.street) != 0;
+  const bool distChanged = drawn.dist_m != nav.dist_m;
   const bool camChanged = drawn.camera != nav.camera || drawn.cam_m != nav.cam_m;
   const bool iconChanged = drawn.has_icon != nav.has_icon ||
       (nav.has_icon && memcmp(drawn.icon, nav.icon, sizeof(nav.icon)) != 0);
-  const bool turnChanged = drawn.turn != nav.turn || iconChanged;
+  const bool turnChanged = drawn.turn != nav.turn || iconChanged ||
+      strcmp(drawn.street, nav.street) != 0;
 
   if (!distChanged && !camChanged && !turnChanged) {
     return;
@@ -722,9 +737,11 @@ void handleNav() {
     nav.cam_m = -1;
   }
 
+  nav.has_icon = false;
   if (doc["icon"].is<const char *>()) {
     const char *hex = doc["icon"];
-    if (parseIconHex(hex, nav.icon, sizeof(nav.icon))) {
+    if (parseIconHex(hex, nav.icon, sizeof(nav.icon)) &&
+        !iconTooDense(nav.icon, sizeof(nav.icon))) {
       nav.has_icon = true;
     }
   }
