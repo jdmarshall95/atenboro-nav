@@ -41,9 +41,28 @@ class NavParserTest {
     }
 
     @Test
+    fun parsesPocketBannerDistanceAndStreet() {
+        val update = NavParser.parse(
+            listOf("400 m — Большой Строченовский переулок", "Update", "Step by Step", "32 min")
+        )
+        assertEquals(400, update.distM)
+        assertEquals("Большой Строченовский переулок", update.street)
+        assertEquals("none", update.turn) // turn только из иконки/слов
+        assertFalse(update.allTexts.any { it.equals("Update", ignoreCase = true) })
+    }
+
+    @Test
+    fun dropsJunkChromeWithoutInventingStraight() {
+        val update = NavParser.parse(
+            listOf("Update", "Step by Step", "Duration: 32 min", "Search")
+        )
+        assertEquals("none", update.turn)
+        assertEquals(-1, update.distM)
+        assertTrue(update.allTexts.isEmpty())
+    }
+
+    @Test
     fun filtersOutTotalRouteDistanceWithTripTime() {
-        // Real-world 2GIS case: Screen contains total route info "17 км • 25 мин"
-        // and maneuver info "400 м" "направо на ул. Чехова"
         val update = NavParser.parse(
             listOf(
                 "400 м",

@@ -2,7 +2,7 @@
 
 **2ГИС → OLED** на плате HW-364A (ESP8266 + SSD1306 128×64).
 
-[![Version](https://img.shields.io/badge/version-0.1.5-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
+[![Version](https://img.shields.io/badge/version-0.1.6-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square&labelColor=16181f)](LICENSE)
 
 Телефон читает манёвры 2ГИС и рисует их на OLED: стрелка, метры, мигающий лимит камеры.
@@ -29,7 +29,7 @@
 
 ## Приложение Android
 
-Реальные скриншоты с Pixel.
+Реальные скриншоты с устройства.
 
 ### Главный экран
 
@@ -105,8 +105,8 @@ SoftAP: `atenboro-nav` / `atenboro1` → `http://192.168.4.1`
 
 ## API платы
 
-| | | |
-|--|--|--|
+| Метод | Путь | Описание |
+|-------|------|----------|
 | `GET` | `/health` | версия |
 | `POST` | `/nav` | `turn`, `dist_m`, `camera`, `cam_m`, `cam_kmh` |
 | `GET` | `/screen` | framebuffer + meta |
@@ -128,11 +128,39 @@ curl -s -X POST http://192.168.4.1/nav \
 | [`docs/WIRING.md`](docs/WIRING.md) | пины |
 | [`docs/TESTING.md`](docs/TESTING.md) | чеклист |
 | [`CHANGELOG.md`](CHANGELOG.md) | история |
+| Roadmap | [железо и BLE](#roadmap--железо) |
 
 ## Заметки
 
 - 2ГИС на Qt почти не отдаёт a11y-текст — в фоне работают notification icon и logcat.
 - SoftAP без интернета: без «Подключить к плате» HTTP уйдёт в LTE.
+- На Android SoftAP часто отваливается, когда телефон видит знакомую сеть — это главный стимул уйти на BLE.
+
+## Roadmap / железо
+
+### Сейчас
+
+| | |
+|--|--|
+| Плата | **HW-364A** — ESP8266 + SSD1306 128×64 (жёлтый/синий) |
+| Связь | Wi‑Fi SoftAP `atenboro-nav` → HTTP `192.168.4.1` |
+| Питание | Li‑ion ~650 mAh — SoftAP прожорлив, автономность ограничена |
+| Минусы | конфликт с известными Wi‑Fi на телефоне, расход, размер модуля |
+
+### Дальше
+
+Цель: **BLE GATT** вместо SoftAP; наушники (A2DP/HFP) работают параллельно по Classic BT.
+
+| Приоритет | Железо | Зачем |
+|-----------|--------|--------|
+| 1 | **ESP32‑C3 SuperMini** / Seeed XIAO ESP32‑C3 | BLE, USB‑C, быстрый порт firmware |
+| 1 | OLED **0.96″ SSD1306 I2C 128×64** dual‑color | тот же HUD |
+| 1 | Li‑ion **1000–2000 mAh** + **TP4056** | запас ёмкости без SoftAP |
+| 2 | **Seeed XIAO nRF52840** + тот же OLED | максимум автономности (опционально) |
+
+Не для HUD: IPS/TFT (подсветка), e‑ink (медленно), Classic SPP (конфликт с наушниками).
+
+Протокол (план): плата = BLE peripheral, телефон пишет короткий кадр манёвра и держит FGS‑reconnect.
 
 ## Лицензия
 

@@ -12,6 +12,7 @@ import com.atenboro.nav.nav.NavFeed
 import com.atenboro.nav.parse.ManeuverHudScanner
 import com.atenboro.nav.parse.ManeuverIconClassifier
 import com.atenboro.nav.parse.NavParser
+import com.atenboro.nav.parse.NavTextFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,27 +50,47 @@ class NavAccessibilityService : AccessibilityService() {
         if (!from2gis && !fromNotifShade) return
 
         val texts = collectTwoGisTexts()
-        if (texts.isNotEmpty()) {
-            val parsed = NavParser.parse(texts)
-            val update = parsed.copy(navigating = true)
-            NavFeed.publish(this, update, "a11y")
+        val clean = NavTextFilter.sanitize(texts)
+        if (clean.isNotEmpty()) {
+            val parsed = NavParser.parse(clean)
+            // Не публикуем chrome-only апдейты без манёвра/баннера
+            val pocket = NavTextFilter.parsePocketBanner(texts)
+            val useful = parsed.turn != "none" ||
+                pocket != null ||
+                parsed.camera ||
+                (parsed.distM in 30..2_500 && clean.any { it.contains('—') || it.contains('-') })
+            if (useful) {
+                val update = parsed.copy(
+                    navigating = true,
+                    distM = pocket?.distM ?: parsed.distM,
+                    street = pocket?.street ?: parsed.street,
+                    // a11y без уверенного поворота — пусть notif решит; не шлём fake straight
+                    turn = parsed.turn,
+                    iconHex = if (parsed.turn != "none") {
+                        ManeuverIconClassifier.fallbackGlyphHex(parsed.turn)
+                    } else {
+                        null
+                    }
+                )
+                NavFeed.publish(this, update, "a11y")
+            }
         }
 
         // Манёвр рисуется на Qt/OpenGL — скрин карточки слева сверху
         if (from2gis && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             ManeuverHudScanner.maybeScan(this, shotExecutor) { result ->
-                if (result.turn == "none" && result.mono32 == null) return@maybeScan
-                if (result.turn == lastHudTurn && result.turn != "none") {
-                    // всё равно периодически обновим через notif heartbeat; здесь только смена
-                }
+                if (!result.isConfident) return@maybeScan
+                if (result.turn == lastHudTurn) return@maybeScan
                 lastHudTurn = result.turn
-                val iconHex = result.mono32?.let { ManeuverIconClassifier.monoToHex(it) }
-                val fromTexts = if (texts.isNotEmpty()) NavParser.parse(texts) else null
+                val fromTexts = if (clean.isNotEmpty()) NavParser.parse(clean) else null
+                val pocket = NavTextFilter.parsePocketBanner(texts)
                 val update = (fromTexts ?: com.atenboro.nav.model.NavUpdate()).copy(
-                    turn = if (result.turn != "none") result.turn else (fromTexts?.turn ?: "none"),
-                    iconHex = iconHex,
+                    turn = result.turn,
+                    distM = pocket?.distM ?: fromTexts?.distM ?: -1,
+                    street = pocket?.street ?: fromTexts?.street,
+                    iconHex = ManeuverIconClassifier.fallbackGlyphHex(result.turn),
                     navigating = true,
-                    allTexts = fromTexts?.allTexts ?: texts
+                    allTexts = fromTexts?.allTexts ?: clean
                 )
                 NavFeed.publish(applicationContext, update, "a11y/hud")
             }

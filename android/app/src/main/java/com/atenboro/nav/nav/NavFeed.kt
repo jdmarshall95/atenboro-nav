@@ -15,14 +15,13 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Единая точка публикации HUD на ESP.
- * Пока идёт навигация — держим манёвр на плате heartbeat'ом (не откатываем на splash).
- * Приоритет: notif (largeIcon) > a11y/hud скрин.
+ * Приоритет: notif (карман) > a11y/hud скрин.
  */
 object NavFeed {
     private const val TAG = "AtenboroNavFeed"
     private const val THROTTLE_MS = 350L
     private const val HEARTBEAT_MS = 2000L
-    private const val HUD_DEFER_MS = 8000L
+    private const val NOTIF_HOLD_MS = 10_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val esp = EspClient()
@@ -32,20 +31,22 @@ object NavFeed {
     @Volatile private var lastSendAt = 0L
     @Volatile private var lastLogAt = 0L
     @Volatile private var navigating = false
-    @Volatile private var lastNotifIconAt = 0L
+    @Volatile private var lastNotifAt = 0L
+    @Volatile private var lastNotif: NavUpdate? = null
 
     fun isUseful(u: NavUpdate): Boolean {
-        if (u.navigating && (u.turn != "none" || !u.iconHex.isNullOrEmpty())) return true
         if (u.camera) return true
         if (u.turn != "none") return true
-        if (!u.iconHex.isNullOrEmpty()) return true
-        if (u.distM in 0..2_500) return true
+        if (!u.iconHex.isNullOrEmpty() && u.distM in 0..2_500) return true
+        // Карманный баннер «N m — улица» без манёвра всё же полезен (дистанция/улица)
+        if (u.distM in 30..2_500 && !u.street.isNullOrBlank()) return true
         return false
     }
 
     fun clearNavigating(context: Context, source: String) {
         navigating = false
-        lastNotifIconAt = 0L
+        lastNotifAt = 0L
+        lastNotif = null
         DebugStore.get(context).info("$source nav ended")
     }
 
@@ -53,22 +54,37 @@ object NavFeed {
         val store = DebugStore.get(context)
         if (update.navigating) navigating = true
 
-        if (source.startsWith("notif") && (!update.iconHex.isNullOrEmpty() || update.turn != "none")) {
-            lastNotifIconAt = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        val fromNotif = source.startsWith("notif")
+        val fromA11y = source.startsWith("a11y")
+
+        if (fromNotif && isUseful(update)) {
+            lastNotifAt = now
+            lastNotif = update
         }
 
-        // HUD-скрин не перебивает свежий notif-манёвр
-        if (source.contains("hud") && System.currentTimeMillis() - lastNotifIconAt < HUD_DEFER_MS) {
-            val prev = lastSent
-            if (prev != null && (prev.turn != "none" || !prev.iconHex.isNullOrEmpty())) {
-                return
+        // a11y/hud не перебивают свежий карманный notif
+        if (fromA11y && now - lastNotifAt < NOTIF_HOLD_MS) {
+            val held = lastNotif
+            if (held != null && isUseful(held)) {
+                // Разрешаем a11y только усилить уверенный манёвр/камеру, не затирать
+                val improved =
+                    (update.turn != "none" && update.turn != "straight" && held.turn == "straight") ||
+                        (update.camera && !held.camera) ||
+                        (update.distM in 0..2_500 && held.distM < 0)
+                if (!improved) {
+                    if (now - lastLogAt > 4_000) {
+                        lastLogAt = now
+                        store.info("$source deferred (notif hold) keep=${held.turn}/${held.distM}")
+                    }
+                    return
+                }
             }
         }
 
-        val merged = mergeSticky(update)
+        val merged = mergeSticky(preferNotifFields(update, fromA11y))
         NavBus.publish(merged)
 
-        val now = System.currentTimeMillis()
         if (now - lastLogAt > 3_000) {
             lastLogAt = now
             val sample = merged.allTexts.take(4).joinToString(" | ").take(100)
@@ -122,6 +138,34 @@ object NavFeed {
         }
     }
 
+    /** a11y не должен затирать дистанцию/улицу свежего notif слабыми значениями. */
+    private fun preferNotifFields(update: NavUpdate, fromA11y: Boolean): NavUpdate {
+        if (!fromA11y) return update
+        val held = lastNotif ?: return update
+        if (System.currentTimeMillis() - lastNotifAt >= NOTIF_HOLD_MS) return update
+
+        var turn = update.turn
+        var dist = update.distM
+        var street = update.street
+        var icon = update.iconHex
+
+        // Не даём слабому straight из a11y сбить боковой манёвр notif
+        if (turn == "straight" && held.turn != "none" && held.turn != "straight") {
+            turn = held.turn
+            if (icon.isNullOrEmpty()) icon = held.iconHex
+        }
+        if (turn == "none" && held.turn != "none") turn = held.turn
+
+        if (held.distM in 0..2_500) {
+            if (dist < 0 || dist > held.distM * 2 && held.distM in 50..2_000) {
+                dist = held.distM
+            }
+        }
+        if (street.isNullOrBlank() && !held.street.isNullOrBlank()) street = held.street
+
+        return update.copy(turn = turn, distM = dist, street = street, iconHex = icon)
+    }
+
     private fun mergeSticky(update: NavUpdate): NavUpdate {
         val prev = lastSent ?: return update
         if (!navigating && !update.navigating) return update
@@ -134,8 +178,12 @@ object NavFeed {
         var camM = update.camM
         var camKmh = update.camKmh
 
-        if (turn == "none" && prev.turn != "none") turn = prev.turn
-        // null = поле не пришло (держать sticky); "" = явно сбросить иконку
+        if (turn == "none" && prev.turn != "none") {
+            // Не поднимаем старый манёвр поверх карманного баннера без иконки —
+            // иначе залипает ошибочный straight/left
+            val pocketOnly = update.distM in 30..2_500 && !update.street.isNullOrBlank()
+            if (!pocketOnly) turn = prev.turn
+        }
         if (update.iconHex == "") {
             icon = null
         } else if (icon.isNullOrEmpty() && !prev.iconHex.isNullOrEmpty()) {

@@ -20,6 +20,7 @@ import com.atenboro.nav.model.NavUpdate
 import com.atenboro.nav.nav.NavFeed
 import com.atenboro.nav.parse.ManeuverIconClassifier
 import com.atenboro.nav.parse.NavParser
+import com.atenboro.nav.parse.NavTextFilter
 import com.atenboro.nav.parse.RemoteViewsReader
 
 /**
@@ -86,41 +87,52 @@ class NavNotificationListener : NotificationListenerService() {
 
                 val cleanTexts = texts.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
                 val parsed = NavParser.parse(cleanTexts)
+                val pocket = NavTextFilter.parsePocketBanner(cleanTexts)
 
-                // largeIcon обычно самый крупный — сортируем по площади
-                val ordered = bitmaps.sortedByDescending { it.width * it.height }
-                var bestIcon: ManeuverIconClassifier.Result? = null
-                for (bmp in ordered) {
-                    val r = ManeuverIconClassifier.analyze(bmp)
-                    if (r.turn != "none") {
-                        bestIcon = r
-                        break
+                // Среди bitmap выбираем манёвр: боковой > прямо; режем полоски/бары
+                val candidates = bitmaps
+                    .filter { isPlausibleManeuverIcon(it) }
+                    .sortedByDescending { it.width * it.height }
+                    .map { bmp -> bmp to ManeuverIconClassifier.analyze(bmp) }
+                    .filter { (_, r) -> r.turn != "none" }
+                val bestIcon = pickBestIcon(candidates.map { it.second })
+                if (candidates.isNotEmpty()) {
+                    val summary = candidates.take(6).joinToString("; ") { (bmp, r) ->
+                        "${bmp.width}x${bmp.height}:${r.turn}@${"%.2f".format(r.confidence)}"
                     }
-                    if (bestIcon == null && r.mono32 != null) bestIcon = r
+                    Log.d(TAG, "icon candidates: $summary -> ${bestIcon?.turn}@${bestIcon?.confidence}")
                 }
 
+                // Текст > уверенная иконка. Слабый straight без текста — none (не угадываем).
                 val turn = when {
                     parsed.turn != "none" -> parsed.turn
-                    bestIcon != null && bestIcon.turn != "none" -> bestIcon.turn
-                    navigating && bestIcon?.mono32 != null -> "straight"
-                    else -> parsed.turn
+                    bestIcon != null && bestIcon.isConfident -> bestIcon.turn
+                    bestIcon != null && bestIcon.turn != "none" && bestIcon.turn != "straight" ->
+                        bestIcon.turn
+                    else -> "none"
                 }
 
-                val street = guessStreet(cleanTexts)
+                val street = pocket?.street ?: guessStreet(cleanTexts)
+                val distM = pocket?.distM?.takeIf { it >= 0 } ?: parsed.distM
+
+                // На OLED всегда встроенный глиф по итоговому turn (не сырой mono 2ГИС)
                 val iconHex = when {
-                    bestIcon?.mono32 != null ->
-                        ManeuverIconClassifier.monoToHex(bestIcon!!.mono32!!)
-                    turn != "none" ->
-                        ManeuverIconClassifier.fallbackGlyphHex(turn)
+                    turn != "none" -> ManeuverIconClassifier.fallbackGlyphHex(turn)
                     else -> ""
+                }
+
+                // Пустой карманный апдейт без манёвра — не шлём (кроме камеры)
+                if (turn == "none" && distM < 0 && !parsed.camera && !navigating) {
+                    return@post
                 }
 
                 val update = parsed.copy(
                     turn = turn,
+                    distM = distM,
                     iconHex = iconHex,
                     street = street,
-                    navigating = navigating,
-                    allTexts = cleanTexts
+                    navigating = navigating || turn != "none" || distM >= 0,
+                    allTexts = parsed.allTexts.ifEmpty { NavTextFilter.sanitize(cleanTexts) }
                 )
                 NavFeed.publish(applicationContext, update, "notif/$reason")
             } catch (e: Exception) {
@@ -192,6 +204,32 @@ class NavNotificationListener : NotificationListenerService() {
                 }
             }
         }
+    }
+
+    /** Боковой манёвр важнее «прямо»; при равном типе — выше confidence. */
+    private fun pickBestIcon(results: List<ManeuverIconClassifier.Result>): ManeuverIconClassifier.Result? {
+        if (results.isEmpty()) return null
+        fun rank(r: ManeuverIconClassifier.Result): Int = when (r.turn) {
+            "left", "right", "slight_left", "slight_right" -> 3
+            "u_turn", "roundabout" -> 2
+            "straight" -> 1
+            else -> 0
+        }
+        return results.maxWithOrNull(
+            compareBy<ManeuverIconClassifier.Result> { rank(it) }
+                .thenBy { it.confidence }
+                .thenBy { if (it.isConfident) 1 else 0 }
+        )
+    }
+
+    /** Отсекает progress-bar / декоративные полоски RemoteViews. */
+    private fun isPlausibleManeuverIcon(bmp: Bitmap): Boolean {
+        val w = bmp.width
+        val h = bmp.height
+        if (w < 24 || h < 24) return false
+        if (w > 512 || h > 512) return false
+        val aspect = w.toFloat() / h.toFloat()
+        return aspect in 0.45f..2.2f
     }
 
     private fun guessStreet(texts: List<String>): String? {
