@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.4] — 2026-09-29
+
+### Changed
+- OLED HUD redesign for dual-color panel:
+  - yellow (y0–15): camera only — blink + speed km/h (empty if no camera)
+  - blue (y16–63): left half = redesigned direction arrow, right half = distance + `m`
+- Built-in 48×48 arrows replace 2GIS mono icons on the board
+
+### Added
+- `cam_kmh` in POST `/nav` and Android parser (limit near camera banners)
+
 ## [0.1.3] — 2026-09-29
 
 ### Fixed

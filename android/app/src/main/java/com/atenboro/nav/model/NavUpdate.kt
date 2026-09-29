@@ -7,6 +7,8 @@ data class NavUpdate(
     val distM: Int = -1,
     val camera: Boolean = false,
     val camM: Int = -1,
+    /** Лимит скорости камеры, км/ч (−1 = нет) */
+    val camKmh: Int = -1,
     val ts: Long = System.currentTimeMillis() / 1000,
     val rawSnippet: String = "",
     val allDistances: List<Int> = emptyList(),
@@ -20,8 +22,8 @@ data class NavUpdate(
 ) {
     fun toJson(): String {
         val cam = if (camera) "true" else "false"
-        val sb = StringBuilder(160 + (iconHex?.length ?: 0))
-        sb.append("""{"turn":"$turn","dist_m":$distM,"camera":$cam,"cam_m":$camM,"ts":$ts""")
+        val sb = StringBuilder(180 + (iconHex?.length ?: 0))
+        sb.append("""{"turn":"$turn","dist_m":$distM,"camera":$cam,"cam_m":$camM,"cam_kmh":$camKmh,"ts":$ts""")
         if (!iconHex.isNullOrEmpty()) {
             sb.append(""","icon_w":32,"icon_h":32,"icon":"$iconHex"""")
         }
@@ -38,12 +40,9 @@ data class NavUpdate(
     }
 
     fun previewText(): String {
-        val dist = if (distM >= 0) {
-            if (distM >= 1000) String.format("%.1f км", distM / 1000.0) else "$distM м"
-        } else {
-            "—"
-        }
+        val dist = if (distM >= 0) "$distM м" else "—"
         val cam = when {
+            camera && camKmh > 0 -> "да (${camKmh} км/ч)"
             camera && camM >= 0 -> "да ($camM м)"
             camera -> "да"
             else -> "нет"
@@ -68,7 +67,8 @@ data class NavUpdate(
         sb.append("Время: ").append(ts).append("\n")
         sb.append("Определён поворот: ").append(turn).append("\n")
         sb.append("Дистанция маневра: ").append(if (distM >= 0) "$distM м" else "не найдена").append("\n")
-        sb.append("Камера: ").append(camera).append(" (dist: ").append(camM).append(" м)\n")
+        sb.append("Камера: ").append(camera)
+            .append(" (dist: ").append(camM).append(" м, speed: ").append(camKmh).append(" км/ч)\n")
         sb.append("Все найденные дистанции: ").append(if (allDistances.isEmpty()) "нет" else allDistances.joinToString { "$it м" }).append("\n")
         if (lastError != null) {
             sb.append("Ошибка ESP: ").append(lastError).append("\n")
