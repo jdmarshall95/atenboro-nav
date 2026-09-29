@@ -661,6 +661,31 @@ void handleDebugDelete() {
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
+/** Снимок framebuffer OLED: raw 1024 байта + метаданные в заголовках. */
+void handleScreen() {
+  if (!oledReady) {
+    server.send(503, "application/json", "{\"ok\":false,\"error\":\"no oled\"}");
+    return;
+  }
+  const uint8_t *buf = display.getBuffer();
+  const size_t bufLen = (size_t)SCREEN_W * ((SCREEN_H + 7) / 8); // 1024
+
+  char meta[96];
+  snprintf(meta, sizeof(meta), "turn=%s;dist=%d;cam=%d;street=%s;icon=%d;ver=%s",
+           turnLabel(nav.turn), nav.dist_m, nav.camera ? 1 : 0, nav.street,
+           nav.has_icon ? 1 : 0, FW_VERSION);
+
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("X-OLED-W", String(SCREEN_W));
+  server.sendHeader("X-OLED-H", String(SCREEN_H));
+  server.sendHeader("X-OLED-FMT", "ssd1306_page");
+  server.sendHeader("X-OLED-META", meta);
+  server.setContentLength(bufLen);
+  server.send(200, "application/octet-stream", "");
+  WiFiClient client = server.client();
+  client.write(buf, bufLen);
+}
+
 void handleNav() {
   if (server.method() != HTTP_POST) {
     server.send(405, "application/json", "{\"ok\":false,\"error\":\"POST only\"}");
@@ -706,8 +731,15 @@ void handleNav() {
 
   if (doc["street"].is<const char *>()) {
     const char *s = doc["street"];
-    strncpy(nav.street, s, sizeof(nav.street) - 1);
-    nav.street[sizeof(nav.street) - 1] = '\0';
+    size_t j = 0;
+    for (size_t i = 0; s[i] && j + 1 < sizeof(nav.street); i++) {
+      unsigned char c = (unsigned char)s[i];
+      // Только печатный ASCII — кириллица UTF-8 на SSD1306 даёт квадраты
+      if (c >= 0x20 && c <= 0x7E) {
+        nav.street[j++] = (char)c;
+      }
+    }
+    nav.street[j] = '\0';
   }
 
   nav.last_update_ms = millis();
@@ -771,6 +803,7 @@ void setup() {
   server.on("/debug", HTTP_POST, handleDebugPost);
   server.on("/debug", HTTP_DELETE, handleDebugDelete);
   server.on("/nav", HTTP_POST, handleNav);
+  server.on("/screen", HTTP_GET, handleScreen);
   server.on("/nav", HTTP_OPTIONS, []() {
     server.sendHeader("Access-Control-Allow-Origin", "*");
     server.sendHeader("Access-Control-Allow-Methods", "POST, OPTIONS");

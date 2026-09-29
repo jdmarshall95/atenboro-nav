@@ -1,5 +1,7 @@
 package com.atenboro.nav.model
 
+import com.atenboro.nav.parse.AsciiLatin
+
 data class NavUpdate(
     val turn: String = "none",
     val distM: Int = -1,
@@ -24,8 +26,12 @@ data class NavUpdate(
             sb.append(""","icon_w":32,"icon_h":32,"icon":"$iconHex"""")
         }
         if (!street.isNullOrBlank()) {
-            val safe = street.replace("\\", "\\\\").replace("\"", "\\\"")
-            sb.append(""","street":"$safe"""")
+            val safe = AsciiLatin.transliterate(street)
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+            if (safe.isNotEmpty()) {
+                sb.append(""","street":"$safe"""")
+            }
         }
         sb.append('}')
         return sb.toString()

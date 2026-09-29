@@ -2,7 +2,7 @@
 
 **2ГИС → OLED HUD** для платы HW-364A (ESP8266 + SSD1306 128×64).
 
-[![Version](https://img.shields.io/badge/version-0.1.1-3DDC97)](VERSION)
+[![Version](https://img.shields.io/badge/version-0.1.2-3DDC97)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Приложение на Android читает подсказки навигации 2ГИС (Accessibility и уведомления) и шлёт на дисплей следующий поворот, дистанцию и камеры. Плата поднимает SoftAP — телефон подключается напрямую.
