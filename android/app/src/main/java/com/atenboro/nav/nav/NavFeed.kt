@@ -133,7 +133,12 @@ object NavFeed {
         var camM = update.camM
 
         if (turn == "none" && prev.turn != "none") turn = prev.turn
-        if (icon.isNullOrEmpty() && !prev.iconHex.isNullOrEmpty()) icon = prev.iconHex
+        // null = поле не пришло (держать sticky); "" = явно сбросить иконку
+        if (update.iconHex == "") {
+            icon = null
+        } else if (icon.isNullOrEmpty() && !prev.iconHex.isNullOrEmpty()) {
+            icon = prev.iconHex
+        }
         if (dist < 0 && prev.distM >= 0) dist = prev.distM
         if (street.isNullOrBlank() && !prev.street.isNullOrBlank()) street = prev.street
         if (!camera && prev.camera) {

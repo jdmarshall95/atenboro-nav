@@ -88,7 +88,8 @@ class NavNotificationListener : NotificationListenerService() {
                 val parsed = NavParser.parse(cleanTexts)
 
                 var bestIcon: ManeuverIconClassifier.Result? = null
-                for (bmp in bitmaps) {
+                // largeIcon обычно последний и самый надёжный — обходим с конца
+                for (bmp in bitmaps.asReversed()) {
                     val r = ManeuverIconClassifier.analyze(bmp)
                     if (r.turn != "none") {
                         bestIcon = r
@@ -100,12 +101,18 @@ class NavNotificationListener : NotificationListenerService() {
                 val turn = when {
                     parsed.turn != "none" -> parsed.turn
                     bestIcon != null && bestIcon.turn != "none" -> bestIcon.turn
-                    navigating && bestIcon?.mono32 != null -> "straight" // иконка есть — хотя бы держим HUD
+                    navigating && bestIcon?.mono32 != null -> "straight"
                     else -> parsed.turn
                 }
 
                 val street = guessStreet(cleanTexts)
-                val iconHex = bestIcon?.mono32?.let { ManeuverIconClassifier.monoToHex(it) }
+                val iconHex = when {
+                    bestIcon?.mono32 != null ->
+                        ManeuverIconClassifier.monoToHex(bestIcon!!.mono32!!)
+                    turn != "none" ->
+                        ManeuverIconClassifier.fallbackGlyphHex(turn)
+                    else -> ""
+                }
 
                 val update = parsed.copy(
                     turn = turn,

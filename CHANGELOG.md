@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3] — 2026-09-29
+
+### Fixed
+- OLED white block instead of turn arrow: mono icon now uses background-relative ink; dense fills fall back to built-in glyphs
+- Bottom HUD label shows street (ASCII) when available instead of LEFT/RIGHT
+- Reject over-dense icon payloads on firmware
+- Phone sends firmware glyph hex when 2GIS largeIcon mono is unusable (works even before board reflash)
+
 ## [0.1.2] — 2026-09-29
 
 ### Fixed
