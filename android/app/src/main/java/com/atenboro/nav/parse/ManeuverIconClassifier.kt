@@ -15,21 +15,25 @@ object ManeuverIconClassifier {
     data class Result(
         val turn: String,
         /** 128 байт: 32×32, MSB слева, ряд за рядом */
-        val mono32: ByteArray?
-    )
+        val mono32: ByteArray?,
+        /** 0..1 — насколько уверен классификатор (слабый straight лучше игнорировать) */
+        val confidence: Float = 1f
+    ) {
+        val isConfident: Boolean get() = turn != "none" && confidence >= 0.45f
+    }
 
     fun analyze(src: Bitmap?): Result {
         if (src == null || src.width < 8 || src.height < 8) {
-            return Result("none", null)
+            return Result("none", null, 0f)
         }
         val bmp = if (src.config == Bitmap.Config.HARDWARE) {
-            src.copy(Bitmap.Config.ARGB_8888, false) ?: return Result("none", null)
+            src.copy(Bitmap.Config.ARGB_8888, false) ?: return Result("none", null, 0f)
         } else {
             src
         }
-        val turn = classify(bmp)
+        val (turn, confidence) = classify(bmp)
         val mono = toMono32(bmp)
-        return Result(turn, mono)
+        return Result(turn, mono, confidence)
     }
 
     fun toMono32(src: Bitmap): ByteArray? {
@@ -37,13 +41,7 @@ object ManeuverIconClassifier {
         val out = ByteArray(128)
         val pixels = IntArray(32 * 32)
         scaled.getPixels(pixels, 0, 32, 0, 0, 32, 32)
-        // Фон часто синий/цветной (белая стрелка) — берём медиану углов
-        val bgSamples = intArrayOf(
-            pixels[0], pixels[31], pixels[31 * 32], pixels[31 * 32 + 31],
-            pixels[1], pixels[30], pixels[16], pixels[16 * 32]
-        )
-        val bgLum = bgSamples.map { luminance(it) }.sorted()[bgSamples.size / 2]
-        val bgIsLight = bgLum > 140
+        val (bgLum, bgIsLight) = estimateBackground(scaled)
         var inkCount = 0
         for (y in 0 until 32) {
             for (xByte in 0 until 4) {
@@ -90,15 +88,10 @@ object ManeuverIconClassifier {
         "roundabout" to "000ff000003ffc00007ffe0000f81f0001e0078003c003c0038001c0070000e0070000e00e0000700e0180700e03c0700e07e0700e0ff0700e07e0700e03c0700e0180700e000070070000e0070000e0038001c003c003c001e0078000f81f00007ffe00003ffc00000ff0000000000000000000000000000000000000000000"
     )
 
-    private fun classify(src: Bitmap): String {
+    private fun classify(src: Bitmap): Pair<String, Float> {
         val w = src.width
         val h = src.height
-        val corners = intArrayOf(
-            src.getPixel(0, 0), src.getPixel(w - 1, 0),
-            src.getPixel(0, h - 1), src.getPixel(w - 1, h - 1)
-        )
-        val bgLum = corners.map { luminance(it) }.sorted()[corners.size / 2]
-        val bgIsLight = bgLum > 140
+        val (bgLum, bgIsLight) = estimateBackground(src)
 
         var minX = w
         var minY = h
@@ -113,6 +106,9 @@ object ManeuverIconClassifier {
         var inkBottom = 0
         var inkCenter = 0
         var inkEdge = 0
+        // Tip mass: leftmost / rightmost 22% of bounding box
+        var tipLeft = 0
+        var tipRight = 0
 
         for (y in 0 until h step step) {
             for (x in 0 until w step step) {
@@ -133,57 +129,150 @@ object ManeuverIconClassifier {
             }
         }
 
-        if (ink < 20) return "none"
+        if (ink < 20) return "none" to 0f
 
         val bw = (maxX - minX + 1).toFloat()
         val bh = (maxY - minY + 1).toFloat()
         val fill = ink.toFloat() / ((bw / step) * (bh / step)).coerceAtLeast(1f)
+        val tipBand = (bw * 0.22f).coerceAtLeast(1f)
+
+        // Квадранты bbox — ловят угловой манёвр 2ГИС (ствол вниз + остриё вбок)
+        var qTL = 0
+        var qTR = 0
+        var qBL = 0
+        var qBR = 0
+        val midX = (minX + maxX) / 2
+        val midY = (minY + maxY) / 2
+        for (y in minY..maxY step step) {
+            for (x in minX..maxX step step) {
+                if (!isForeground(src.getPixel(x, y), bgLum, bgIsLight)) continue
+                if (x <= minX + tipBand) tipLeft++
+                if (x >= maxX - tipBand) tipRight++
+                val left = x <= midX
+                val top = y <= midY
+                when {
+                    left && top -> qTL++
+                    !left && top -> qTR++
+                    left && !top -> qBL++
+                    else -> qBR++
+                }
+            }
+        }
+
+        // Угол направо: почти пустой BR, масса в TR + ствол слева/снизу
+        val cornerRight =
+            qBR < ink * 0.08f && qTR > ink * 0.22f && (qTL + qBL) > ink * 0.28f
+        val cornerLeft =
+            qBL < ink * 0.08f && qTL > ink * 0.22f && (qTR + qBR) > ink * 0.28f
+        if (cornerRight && !cornerLeft) return "right" to 0.9f
+        if (cornerLeft && !cornerRight) return "left" to 0.9f
 
         // U-turn: петля сверху + ножка сбоку (часто пусто внизу-центре)
         if (inkTop > inkBottom * 1.2f && fill in 0.12f..0.50f) {
             val tall = bh / bw.coerceAtLeast(1f)
             val sideHeavy = max(inkLeft, inkRight) > ink * 0.32f
-            if (tall > 0.9f && sideHeavy && inkCenter < ink * 0.22f) return "u_turn"
+            if (tall > 0.9f && sideHeavy && inkCenter < ink * 0.22f) {
+                return "u_turn" to 0.75f
+            }
         }
 
         // Круговое / кольцо: много краёв, мало центра
         if (fill in 0.15f..0.55f && inkEdge > inkCenter * 2.2f && abs(inkLeft - inkRight) < ink * 0.18f) {
-            return "roundabout"
+            return "roundabout" to 0.7f
         }
 
         val lr = (inkLeft - inkRight).toFloat() / ink
         val tb = (inkTop - inkBottom).toFloat() / ink
+        // У шеврона масса у основания; остриё — сторона с меньшей tip-массой
+        val tipLr = (tipLeft - tipRight).toFloat() / max(tipLeft + tipRight, 1)
+        val tipPointsLeft = tipLeft < tipRight
+        val tipPointsRight = tipRight < tipLeft
+        val wide = bw / bh.coerceAtLeast(1f)
+        val tall = bh / bw.coerceAtLeast(1f)
 
-        // Вертикальная «стрелка вверх»: баланс L/R
-        if (abs(lr) < 0.12f && tb < 0.25f) {
-            return "straight"
-        }
-        // Лёгкий дисбаланс при вертикальной стрелке — slight
-        if (abs(lr) in 0.12f..0.28f && abs(tb) < 0.35f) {
-            return if (lr > 0) "slight_left" else "slight_right"
+        // Горизонтальный шеврон: направление = остриё (против массы)
+        if (wide >= 0.85f && (tipPointsLeft || tipPointsRight || abs(lr) >= 0.10f || abs(tipLr) >= 0.12f)) {
+            val left = when {
+                tipPointsLeft && !tipPointsRight -> true
+                tipPointsRight && !tipPointsLeft -> false
+                abs(tipLr) >= abs(lr) && abs(tipLr) >= 0.12f -> tipLr < 0
+                else -> lr < 0
+            }
+            // Не путать с вертикальным «прямо»: нужен явный боковой tip/масса
+            if (abs(tipLr) >= 0.12f || abs(lr) >= 0.10f || tipPointsLeft || tipPointsRight) {
+                return if (left) {
+                    (if (tb > 0.18f) "slight_left" else "left") to 0.85f
+                } else {
+                    (if (tb > 0.18f) "slight_right" else "right") to 0.85f
+                }
+            }
         }
 
-        if (lr > 0.28f) {
-            return if (tb > 0.12f) "slight_left" else "left"
+        // Явный боковой перевес массы → остриё на противоположной стороне
+        if (lr > 0.22f || tipLr > 0.25f) {
+            return (if (tb > 0.15f) "slight_right" else "right") to 0.75f
         }
-        if (lr < -0.28f) {
-            return if (tb > 0.12f) "slight_right" else "right"
+        if (lr < -0.22f || tipLr < -0.25f) {
+            return (if (tb > 0.15f) "slight_left" else "left") to 0.75f
+        }
+
+        // Вертикальная «стрелка вверх»: только если правда узкая/высокая и баланс L/R
+        if (abs(lr) < 0.10f && abs(tipLr) < 0.12f && tall >= 1.05f && tb <= 0.30f) {
+            return "straight" to 0.7f
+        }
+
+        // Лёгкий дисбаланс — slight (масса напротив направления)
+        if (abs(lr) in 0.10f..0.22f && abs(tb) < 0.35f) {
+            return (if (lr > 0) "slight_right" else "slight_left") to 0.55f
+        }
+
+        // Слабый straight без уверенности — лучше none, чем ложный прямо
+        if (abs(lr) < 0.10f && abs(tipLr) < 0.12f) {
+            return "straight" to 0.35f
         }
 
         return when {
-            lr > 0.08f -> "slight_left"
-            lr < -0.08f -> "slight_right"
-            tb < -0.05f -> "straight"
-            else -> "straight"
+            lr > 0.08f -> "slight_right" to 0.45f
+            lr < -0.08f -> "slight_left" to 0.45f
+            else -> "straight" to 0.3f
         }
     }
 
-    private fun lrHint(left: Int, right: Int, ink: Int): Float =
-        (left - right).toFloat() / ink.coerceAtLeast(1)
+    /**
+     * Фон largeIcon 2ГИС часто полностью прозрачный по углам.
+     * Нельзя считать alpha=0 «белым» — иначе чёрная подложка становится «чернилами».
+     */
+    private fun estimateBackground(src: Bitmap): Pair<Int, Boolean> {
+        val w = src.width
+        val h = src.height
+        val samples = mutableListOf<Int>()
+        val corners = listOf(
+            0 to 0, (w - 1) to 0, 0 to (h - 1), (w - 1) to (h - 1)
+        )
+        for ((cx, cy) in corners) {
+            var found: Int? = null
+            for (d in 0..min(w, h) / 4) {
+                val x = (cx + if (cx == 0) d else -d).coerceIn(0, w - 1)
+                val y = (cy + if (cy == 0) d else -d).coerceIn(0, h - 1)
+                val c = src.getPixel(x, y)
+                if (Color.alpha(c) >= 40) {
+                    found = luminance(c)
+                    break
+                }
+            }
+            if (found != null) samples += found
+        }
+        if (samples.isEmpty()) {
+            // Полностью прозрачная рамка — типичная белая стрелка на прозрачном
+            return 0 to false
+        }
+        val bgLum = samples.sorted()[samples.size / 2]
+        return bgLum to (bgLum > 140)
+    }
 
     private fun luminance(color: Int): Int {
         val a = Color.alpha(color)
-        if (a < 40) return 255
+        if (a < 40) return -1 // не участвует в оценке фона
         return (Color.red(color) + Color.green(color) + Color.blue(color)) / 3
     }
 
@@ -191,13 +280,13 @@ object ManeuverIconClassifier {
     private fun isForeground(color: Int, bgLum: Int, bgIsLight: Boolean): Boolean {
         val a = Color.alpha(color)
         if (a < 40) return false
-        val lum = luminance(color)
+        val lum = (Color.red(color) + Color.green(color) + Color.blue(color)) / 3
         return if (bgIsLight) {
             // Светлый фон — тёмная/цветная стрелка
             lum < bgLum - 35 || isColoredInk(color)
         } else {
-            // Тёмный/синий фон — светлая стрелка
-            lum > bgLum + 40
+            // Тёмный/прозрачный фон — светлая стрелка
+            lum > max(bgLum + 40, 80)
         }
     }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6] — 2026-09-29
+
+### Fixed
+- Pocket HUD mismatch (2GIS right 400m vs OLED straight 1000): filter 2GIS chrome (`Update` / `Step by Step` / ETA), prefer notif banner `N m — street`, hold notif over noisy a11y/hud for 10s
+- Icon classifier: transparent-corner largeIcon no longer inverted; corner-turn (⌊→) detected; horizontal strips ignored; chevron mass vs tip sign fixed
+- Drop “navigating → straight” fallback; OLED always uses built-in glyphs for the resolved turn
+
 ## [0.1.5] — 2026-09-29
 
 ### Fixed

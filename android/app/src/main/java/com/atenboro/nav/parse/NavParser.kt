@@ -6,7 +6,7 @@ import java.util.regex.Pattern
 
 /**
  * Парсер подсказок 2ГИС из accessibility / notification RemoteViews.
- * Отфильтровывает длину всего маршрута ("17 км • 25 мин").
+ * Отфильтровывает chrome UI и длину всего маршрута ("17 км • 25 мин").
  */
 object NavParser {
 
@@ -16,7 +16,7 @@ object NavParser {
     )
 
     private val timePattern = Pattern.compile(
-        "\\b\\d+\\s*(минут|минуты|мин|часов|часа|час|ч\\.|мин\\.)\\b",
+        "\\b\\d+\\s*(минут|минуты|мин|часов|часа|час|ч\\.|мин\\.|min)\\b",
         Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
     )
 
@@ -37,10 +37,8 @@ object NavParser {
     )
 
     fun parse(texts: List<String>): NavUpdate {
-        val cleanTexts = texts
-            .map { it.replace('\u00A0', ' ').trim() }
-            .filter { it.isNotEmpty() }
-            .distinct()
+        val cleanTexts = NavTextFilter.sanitize(texts)
+        val pocket = NavTextFilter.parsePocketBanner(texts + cleanTexts)
 
         val joined = cleanTexts.joinToString("\n")
         val lowerAll = joined.lowercase(Locale("ru"))
@@ -55,7 +53,6 @@ object NavParser {
             val l = line.lowercase(Locale("ru"))
             !routeSummaryLines.contains(line) && (
                 turnHint.matcher(l).find() ||
-                    // короткая дистанция без времени — часто баннер манёвра "400 м"
                     extractDistancesMeters(line).any { it in 0..3_000 }
                 )
         }
@@ -63,12 +60,14 @@ object NavParser {
         val turn = detectTurnPriority(maneuverLines.ifEmpty { cleanTexts })
 
         val maneuverDistances = extractDistancesMeters(maneuverLines.joinToString("\n"))
-            .filter { it <= 5_000 } // отсекаем длину маршрута
+            .filter { it <= 5_000 }
         val fallbackDistances = extractDistancesMeters(
             cleanTexts.filterNot { routeSummaryLines.contains(it) }.joinToString("\n")
         ).filter { it <= 5_000 }
 
+        // Баннер кармана — самый надёжный источник дистанции манёвра
         val distM = when {
+            pocket != null -> pocket.distM
             maneuverDistances.isNotEmpty() -> maneuverDistances.minOrNull()!!
             turn != "none" && fallbackDistances.isNotEmpty() -> fallbackDistances.minOrNull()!!
             else -> -1
@@ -92,6 +91,7 @@ object NavParser {
             camera = camera,
             camM = if (camera) camM else -1,
             camKmh = camKmh,
+            street = pocket?.street,
             rawSnippet = joined.take(400),
             allDistances = extractDistancesMeters(joined),
             allTexts = cleanTexts
@@ -106,7 +106,6 @@ object NavParser {
                 if (v in 5..150) return v
             }
         }
-        // Число рядом со словом «камера» без единицы — часто лимит на баннере
         for (line in texts) {
             val l = line.lowercase(Locale("ru"))
             if (!cameraPattern.matcher(l).find()) continue
