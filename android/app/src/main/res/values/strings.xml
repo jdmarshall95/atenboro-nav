@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Atenboro Nav</string>
+    <string name="accessibility_description">Читает подсказки навигации 2ГИС и отправляет поворот, дистанцию и камеры на OLED Atenboro.</string>
+    <string name="notification_channel">nav_proxy</string>
+    <string name="notification_title">Atenboro Nav</string>
+    <string name="notification_text">Прокси навигации активен</string>
+
+    <string name="desc_aircraft">Atenboro Aircraft</string>
+    <string name="desc_logo">atenboro logo</string>
+    <string name="header_subtitle">HUD Navigation Proxy  •  2ГИС ➔ ESP8266 OLED</string>
+    <string name="section_status">СТАТУС И ПОДКЛЮЧЕНИЕ</string>
+    <string name="section_oled_preview">ПРОСМОТР ЭКРАНА OLED</string>
+    <string name="tag_oled_hud">128x64 HUD</string>
+    <string name="btn_enable_a11y">Включить Accessibility</string>
+    <string name="btn_enable_notif">Доступ к уведомлениям 2ГИС (карман)</string>
+    <string name="btn_start_proxy">Запустить прокси-сервис</string>
+    <string name="btn_test_oled">Тест OLED</string>
+    <string name="btn_dump">Dump 2ГИС</string>
+    <string name="btn_connect_esp">Подключить к плате</string>
+    <string name="section_debug">ОТЛАДОЧНАЯ ИНФОРМАЦИЯ (2ГИС PARSER DEBUG)</string>
+    <string name="txt_debug_placeholder">Ожидание данных от 2ГИС…</string>
+    <string name="btn_copy">Копировать</string>
+    <string name="section_quick_start">БЫСТРЫЙ СТАРТ</string>
+    <string name="quick_start_hint">1) Подключить к плате\n2) Accessibility + доступ к уведомлениям (для кармана)\n3) Запустить прокси\n4) Навигация в 2ГИС — экран можно блокировать\n\nOLED обновляется только при полезных манёврах (не на «17 км маршрута»).</string>
+</resources>
