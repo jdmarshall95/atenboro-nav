@@ -18,7 +18,13 @@ cd firmware
 ./scripts/test_oled.sh
 ```
 
-Ожидание на экране по очереди: LEFT 250 м + CAM, RIGHT 80 м, STRAIGHT 1.5 km, ROUND + CAM.
+Ожидание на HUD (v0.1.4+): жёлтая полоса — камера/лимит; синяя — стрелка слева, метры справа.
+
+Снимок framebuffer:
+
+```bash
+./scripts/fetch_oled_screen.sh
+```
 
 6. Подождите > 5 с без запросов — должно появиться `NO LINK`.
 
