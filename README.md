@@ -8,7 +8,7 @@
 Телефон читает манёвры 2ГИС и рисует их на OLED: стрелка, метры, мигающий лимит камеры.
 
 <p align="center">
-  <img src="docs/screens/hero.png" alt="OLED: налево, направо, разворот" width="820" />
+  <img src="docs/screens/boot.gif" alt="Atenboro Nav — анимация запуска OLED" width="520" />
 </p>
 
 ```
@@ -22,6 +22,10 @@
 | сверху (`y0–15`) | жёлтый | камера: мигание + км/ч |
 | снизу слева | синий | шеврон манёвра |
 | снизу справа | синий | дистанция + `m` |
+
+<p align="center">
+  <img src="docs/screens/hero.png" alt="OLED: налево, направо, разворот" width="820" />
+</p>
 
 <p align="center">
   <img src="docs/screens/gallery.png" alt="Манёвры OLED" width="820" />
@@ -127,6 +131,7 @@ curl -s -X POST http://192.168.4.1/nav \
 | [`docs/screens/`](docs/screens/) | OLED + UI |
 | [`docs/WIRING.md`](docs/WIRING.md) | пины |
 | [`docs/TESTING.md`](docs/TESTING.md) | чеклист |
+| [`scripts/render_boot_gif.py`](scripts/render_boot_gif.py) | GIF splash для README |
 | [`CHANGELOG.md`](CHANGELOG.md) | история |
 | Roadmap | [железо и BLE](#roadmap--железо) |
 
