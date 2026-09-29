@@ -19,6 +19,9 @@ class NavProxyService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+        // Карманный режим: держим SoftAP-bind и logcat-watcher без открытого UI
+        com.atenboro.nav.net.EspNetwork.bindIfReachable(this)
+        GisLogcatWatcher.start(this)
         return START_STICKY
     }
 

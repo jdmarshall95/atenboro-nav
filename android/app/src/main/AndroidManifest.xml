@@ -73,5 +73,14 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Navigation proxy to ESP8266 OLED display" />
         </service>
+
+        <!-- adb broadcast inject без Activity — тест с заблокированным экраном -->
+        <receiver
+            android:name=".service.InjectNavReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.atenboro.nav.INJECT_NAV" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

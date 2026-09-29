@@ -43,6 +43,16 @@ cd firmware
 4. В приложении смотрите превью поворота/дистанции/камеры.
 5. Если пусто — **Dump узлов 2ГИС**, откройте файл в `Android/data/com.atenboro.nav/files/dumps/` и подправьте `NavParser`.
 
-## 4. Юнит-тесты парсера
+## 4. Заблокированный экран (карман)
+
+Ближе всего к реальной езде: SoftAP + FGS-прокси, экран `Dozing`, апдейты без Activity.
+
+```bash
+./scripts/test_locked_screen.sh
+```
+
+Ожидание: `mWakefulness=Dozing`, в логах `locked-screen turn=… interactive=false`, OLED обновляется (в т.ч. мигание камеры).
+
+## 5. Юнит-тесты парсера
 
 В Android Studio: правый клик по `NavParserTest` → Run.
