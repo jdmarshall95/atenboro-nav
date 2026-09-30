@@ -31,6 +31,24 @@
   <img src="docs/screens/gallery.png" alt="Манёвры OLED" width="820" />
 </p>
 
+## Плата вживую
+
+Снято с телефона на столе (HW-364A + SSD1306), кадр обрезан вокруг платы. Исходные MOV → GIF/MP4: [`scripts/pack_field_gifs.py`](scripts/pack_field_gifs.py).
+
+**SoftAP / splash** — `waiting…` и `AP: atenboro-nav`, затем сплэш:
+
+<p align="center">
+  <img src="docs/screens/field/board-softap.gif" alt="Плата: SoftAP waiting и splash" width="360" />
+</p>
+
+**Живой HUD** — смена манёвра и метров на OLED (сэмпл по ролику; полный клип — MP4):
+
+<p align="center">
+  <img src="docs/screens/field/board-live-nav.gif" alt="Плата: live turn-by-turn на OLED" width="360" />
+</p>
+
+Полный прогон без прореживания кадров: [`docs/screens/field/board-live-nav.mp4`](docs/screens/field/board-live-nav.mp4).
+
 ## Приложение Android
 
 Реальные скриншоты с устройства.
@@ -129,9 +147,11 @@ curl -s -X POST http://192.168.4.1/nav \
 | [`firmware/`](firmware/) | SoftAP + OLED |
 | [`android/`](android/) | прокси 2ГИС |
 | [`docs/screens/`](docs/screens/) | OLED + UI |
+| [`docs/screens/field/`](docs/screens/field/) | живые GIF/MP4 платы |
 | [`docs/WIRING.md`](docs/WIRING.md) | пины |
 | [`docs/TESTING.md`](docs/TESTING.md) | чеклист |
 | [`scripts/render_boot_gif.py`](scripts/render_boot_gif.py) | GIF splash для README |
+| [`scripts/pack_field_gifs.py`](scripts/pack_field_gifs.py) | MOV → field GIF/MP4 |
 | [`CHANGELOG.md`](CHANGELOG.md) | история |
 | Roadmap | [железо и BLE](#roadmap--железо) |
 
