@@ -126,7 +126,8 @@ SoftAP: `atenboro-nav` / `atenboro1` → `http://192.168.4.1`
 2. «Подключить к плате» → Accessibility → уведомления → прокси.
 3. Навигация в 2ГИС (экран можно блокировать).
 
-Чеклист и locked-screen тест: [`docs/TESTING.md`](docs/TESTING.md).
+Чеклист и locked-screen тест: [`docs/TESTING.md`](docs/TESTING.md).  
+Симуляция заезда (inject HUD / mock GPS): [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) — режимы `hud`, `geo`, `full`.
 
 ## API платы
 
@@ -153,6 +154,7 @@ curl -s -X POST http://192.168.4.1/nav \
 | [`docs/screens/field/`](docs/screens/field/) | живые GIF/MP4 платы |
 | [`docs/WIRING.md`](docs/WIRING.md) | пины |
 | [`docs/TESTING.md`](docs/TESTING.md) | чеклист |
+| [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) | симуляция заезда (hud/geo/full) |
 | [`scripts/render_boot_gif.py`](scripts/render_boot_gif.py) | GIF splash для README |
 | [`scripts/pack_field_gifs.py`](scripts/pack_field_gifs.py) | MOV → field GIF/MP4 |
 | [`CHANGELOG.md`](CHANGELOG.md) | история |

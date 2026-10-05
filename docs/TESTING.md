@@ -53,6 +53,24 @@ cd firmware
 
 Ожидание: `mWakefulness=Dozing`, в логах `locked-screen turn=… interactive=false`, OLED обновляется (в т.ч. мигание камеры).
 
-## 5. Юнит-тесты парсера
+## 5. Симуляция заезда (`sim_route_drive`)
+
+Скрипт [`scripts/sim_route_drive.sh`](../scripts/sim_route_drive.sh) гоняет сценарий без реальной поездки:
+
+| Режим | Что делает |
+|-------|------------|
+| `hud` | inject манёвров на OLED через SoftAP (нужна плата / bind) |
+| `geo` | шагает mock GPS по полилинии (нужен fake-GPS app), 2ГИС пересчитывает |
+| `full` | geo + мониторинг сессии / OLED, затем hud-оверлей |
+
+```bash
+./scripts/sim_route_drive.sh hud
+./scripts/sim_route_drive.sh geo
+./scripts/sim_route_drive.sh full
+```
+
+Артефакты пишутся в `/tmp/atenboro-drive-…` (лог, session pull, разбор stutter/flip).
+
+## 6. Юнит-тесты парсера
 
 В Android Studio: правый клик по `NavParserTest` → Run.
