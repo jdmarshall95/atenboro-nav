@@ -1,19 +1,25 @@
-# Atenboro Nav
+# Atenboro Nav — DIY мотонавигатор / bike OLED HUD
 
-**2ГИС → OLED** на плате HW-364A (ESP8266 + SSD1306 128×64).
+Open-source **motorcycle & bicycle navigation HUD**: телефон остаётся в кармане с привычным **2ГИС** (Яндекс — в планах), на руле — дешёвый **OLED** со стрелкой и метрами. Без держалки смартфона и без «ещё одного приложения с картами».
+
+**2ГИС → OLED** на плате HW-364A (**ESP8266** + **SSD1306** 128×64 dual-color). Связь сейчас Wi‑Fi SoftAP; дальше — **ESP32** + BLE.
 
 [![Version](https://img.shields.io/badge/version-0.1.6-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square&labelColor=16181f)](LICENSE)
+[![Platform](https://img.shields.io/badge/Android-proxy-3DDC84?style=flat-square&labelColor=16181f)](android/)
+[![MCU](https://img.shields.io/badge/ESP8266-OLED_HUD-E7352C?style=flat-square&labelColor=16181f)](firmware/)
 
-Телефон читает манёвры 2ГИС и рисует их на OLED: стрелка, метры, мигающий лимит камеры.
+Телефон читает манёвры 2ГИС (notification / Accessibility) и рисует turn-by-turn на OLED: шеврон, дистанция, мигающий лимит камеры. Open source (MIT).
 
 <p align="center">
-  <img src="docs/screens/boot.gif" alt="Atenboro Nav — анимация запуска OLED" width="520" />
+  <img src="docs/screens/boot.gif" alt="Atenboro Nav DIY мотонавигатор — OLED splash ESP8266 SSD1306" width="520" />
 </p>
 
 ```
-2ГИС ──► Atenboro (Android) ── SoftAP ──► ESP8266 OLED
+2ГИС (phone) ──► Atenboro Android ── SoftAP ──► ESP8266 OLED HUD
 ```
+
+Подходит как **мотонавигатор** или вело-HUD: phone mount не нужен, карты остаются в 2ГИС.
 
 ## OLED HUD
 
@@ -24,11 +30,11 @@
 | снизу справа | синий | дистанция + `m` |
 
 <p align="center">
-  <img src="docs/screens/hero.png" alt="OLED: налево, направо, разворот" width="820" />
+  <img src="docs/screens/hero.png" alt="Мотонавигатор Atenboro Nav — OLED стрелки left right u-turn ESP8266" width="820" />
 </p>
 
 <p align="center">
-  <img src="docs/screens/gallery.png" alt="Манёвры OLED" width="820" />
+  <img src="docs/screens/gallery.png" alt="DIY motorcycle navigation HUD OLED maneuvers gallery" width="820" />
 </p>
 
 ## Плата вживую
@@ -38,13 +44,13 @@
 **SoftAP / splash** — `waiting…` и `AP: atenboro-nav`, затем сплэш:
 
 <p align="center">
-  <img src="docs/screens/field/board-softap.gif" alt="Плата: SoftAP waiting и splash" width="360" />
+  <img src="docs/screens/field/board-softap.gif" alt="ESP8266 мотонавигатор SoftAP atenboro-nav OLED splash" width="360" />
 </p>
 
 **Живой HUD** — смена манёвра и метров на OLED (сэмпл по ролику; полный клип — MP4):
 
 <p align="center">
-  <img src="docs/screens/field/board-live-nav.gif" alt="Плата: live turn-by-turn на OLED" width="360" />
+  <img src="docs/screens/field/board-live-nav.gif" alt="Live turn-by-turn motorcycle OLED HUD 2GIS" width="360" />
 </p>
 
 Полный прогон без прореживания кадров: [`docs/screens/field/board-live-nav.mp4`](docs/screens/field/board-live-nav.mp4).
