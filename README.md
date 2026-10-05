@@ -35,22 +35,19 @@ Android-прокси читает манёвры 2ГИС (notification / Accessi
 
 ## Плата вживую
 
-Снято с телефона на столе (HW-364A + SSD1306), кадр обрезан вокруг платы. Исходные MOV → GIF/MP4: [`scripts/pack_field_gifs.py`](scripts/pack_field_gifs.py).
 
-**SoftAP / splash** — `waiting…` и `AP: atenboro-nav`, затем сплэш:
+**SoftAP / splash**
 
 <p align="center">
   <img src="docs/screens/field/board-softap.gif" alt="Плата: SoftAP waiting и splash" width="360" />
 </p>
 
-**Живой HUD** — смена манёвра и метров на OLED (сэмпл по ролику; полный клип — MP4):
+**HUD**
 
 <p align="center">
   <img src="docs/screens/field/board-live-nav.gif" alt="Плата: live turn-by-turn на OLED" width="360" />
 </p>
 
-
-Полный прогон без прореживания кадров: [`docs/screens/field/board-live-nav.mp4`](docs/screens/field/board-live-nav.mp4).
 
 ## Приложение Android
 
