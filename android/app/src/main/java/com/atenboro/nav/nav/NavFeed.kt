@@ -25,6 +25,8 @@ object NavFeed {
     private const val THROTTLE_MS = 350L
     private const val HEARTBEAT_MS = 2000L
     private const val NOTIF_HOLD_MS = 10_000L
+    /** Камера липнет кратко — иначе мигающий кадр без «камер» гасит HUD; дольше — не снять алерт. */
+    private const val CAM_STICKY_MS = 3_500L
     /** Верхняя граница «ещё манёвр», не весь маршрут (км). */
     private const val DIST_USEFUL_MAX = 200_000
 
@@ -38,6 +40,7 @@ object NavFeed {
     @Volatile private var navigating = false
     @Volatile private var lastNotifAt = 0L
     @Volatile private var lastNotif: NavUpdate? = null
+    @Volatile private var lastCameraTrueAt = 0L
 
     fun isUseful(u: NavUpdate): Boolean {
         if (u.camera) return true
@@ -52,6 +55,7 @@ object NavFeed {
         navigating = false
         lastNotifAt = 0L
         lastNotif = null
+        lastCameraTrueAt = 0L
         DebugStore.get(context).info("$source nav ended")
     }
 
@@ -204,13 +208,23 @@ object NavFeed {
         dist = mergeDistance(newDist = dist, prevDist = prev.distM, allowCountdownFromNew = true)
 
         if (street.isNullOrBlank() && !prev.street.isNullOrBlank()) street = prev.street
-        if (!camera && prev.camera) {
-            camera = true
-            camM = prev.camM
-            if (camKmh <= 0) camKmh = prev.camKmh
-        } else if (camera && camKmh <= 0 && prev.camKmh > 0) {
-            camKmh = prev.camKmh
-        }
+
+        val now = System.currentTimeMillis()
+        // Обновляем метку только при явном camera=true — иначе sticky никогда не истечёт
+        if (update.camera) lastCameraTrueAt = now
+        val cam = mergeCamera(
+            newCamera = update.camera,
+            newCamM = update.camM,
+            newCamKmh = update.camKmh,
+            prevCamera = prev.camera,
+            prevCamM = prev.camM,
+            prevCamKmh = prev.camKmh,
+            lastCameraTrueAt = lastCameraTrueAt,
+            now = now
+        )
+        camera = cam.camera
+        camM = cam.camM
+        camKmh = cam.camKmh
 
         return update.copy(
             turn = turn,
@@ -222,6 +236,43 @@ object NavFeed {
             camKmh = camKmh,
             navigating = navigating || update.navigating
         )
+    }
+
+    /**
+     * Камера: короткий sticky против дырявых notif-кадров; после [CAM_STICKY_MS]
+     * явный camera=false снимает алерт (иначе OLED мигает вечно).
+     */
+    internal data class CamMerge(val camera: Boolean, val camM: Int, val camKmh: Int)
+
+    internal fun mergeCamera(
+        newCamera: Boolean,
+        newCamM: Int,
+        newCamKmh: Int,
+        prevCamera: Boolean,
+        prevCamM: Int,
+        prevCamKmh: Int,
+        lastCameraTrueAt: Long,
+        now: Long,
+        stickyMs: Long = CAM_STICKY_MS
+    ): CamMerge {
+        if (newCamera) {
+            val kmh = if (newCamKmh > 0) newCamKmh else prevCamKmh
+            val m = if (newCamM >= 0) newCamM else prevCamM
+            return CamMerge(true, m, kmh)
+        }
+        if (!prevCamera) {
+            return CamMerge(false, -1, -1)
+        }
+        val age = now - lastCameraTrueAt
+        return if (age < stickyMs) {
+            CamMerge(
+                true,
+                if (prevCamM >= 0) prevCamM else -1,
+                if (prevCamKmh > 0) prevCamKmh else -1
+            )
+        } else {
+            CamMerge(false, -1, -1)
+        }
     }
 
     /**

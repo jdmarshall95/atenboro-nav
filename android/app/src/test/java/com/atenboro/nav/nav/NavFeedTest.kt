@@ -23,13 +23,31 @@ class NavFeedTest {
     }
 
     @Test
-    fun isUseful_acceptsSub30mPocketDistance() {
-        // Раньше 30..2500 — на подъезде <30 м update отбрасывался и OLED слал lastSent
-        val near = NavUpdate(turn = "none", distM = 20, street = "Sayanskaya", navigating = true)
-        assertTrue(NavFeed.isUseful(near))
-        val far = NavUpdate(turn = "none", distM = 12_000, street = "Ring", navigating = true)
-        assertTrue(NavFeed.isUseful(far))
-        val empty = NavUpdate(turn = "none", distM = -1, navigating = false)
-        assertFalse(NavFeed.isUseful(empty))
+    fun mergeCamera_stickyThenClearsAfterHold() {
+        val t0 = 1_000_000L
+        val on = NavFeed.mergeCamera(
+            newCamera = true, newCamM = 80, newCamKmh = 60,
+            prevCamera = false, prevCamM = -1, prevCamKmh = -1,
+            lastCameraTrueAt = t0, now = t0
+        )
+        assertTrue(on.camera)
+        assertEquals(60, on.camKmh)
+
+        val within = NavFeed.mergeCamera(
+            newCamera = false, newCamM = -1, newCamKmh = -1,
+            prevCamera = true, prevCamM = 80, prevCamKmh = 60,
+            lastCameraTrueAt = t0, now = t0 + 1_000L
+        )
+        assertTrue(within.camera)
+        assertEquals(60, within.camKmh)
+
+        val after = NavFeed.mergeCamera(
+            newCamera = false, newCamM = -1, newCamKmh = -1,
+            prevCamera = true, prevCamM = 80, prevCamKmh = 60,
+            lastCameraTrueAt = t0, now = t0 + 4_000L
+        )
+        assertFalse(after.camera)
+        assertEquals(-1, after.camM)
+        assertEquals(-1, after.camKmh)
     }
 }

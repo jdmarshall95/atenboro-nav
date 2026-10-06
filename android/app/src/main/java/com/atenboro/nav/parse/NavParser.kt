@@ -32,8 +32,9 @@ object NavParser {
     )
 
     private val turnHint = Pattern.compile(
-        "налево|направо|влево|вправо|прямо|разворот|кольц|кругов|левее|правее|" +
-            "slight|left|right|straight|u-turn|turn|поверните|съезд|держитесь",
+        "налево|направо|влево|вправо|прямо|разворот|разверн|кольц|кругов|левее|правее|" +
+            "slight|keep\\s*left|keep\\s*right|left|right|straight|u-?turn|turn|" +
+            "поверните|съезд|держитесь|плавно",
         Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
     )
 
@@ -128,18 +129,24 @@ object NavParser {
 
         for (line in lowerLines) {
             when {
-                line.contains("разворот") || line.contains("u-turn") || line.contains("разверн") ->
+                line.contains("разворот") || line.contains("u-turn") || line.contains("u turn") ||
+                    line.contains("разверн") || line.contains("развернитесь") ->
                     return "u_turn"
                 line.contains("кольцев") || line.contains("кругов") || line.contains("roundabout") ->
                     return "roundabout"
                 line.contains("прибыл") || line.contains("назначен") || line.contains("финиш") ||
                     line.contains("прибытие") || line.contains("arrive") ->
                     return "arrive"
+                // slight / keep — ДО hard left/right (иначе «левее» ловится как «лев»)
                 line.contains("чуть лев") || line.contains("плавно лев") || line.contains("slight left") ||
-                    line.contains("левее") || line.contains("держитесь левее") ->
+                    line.contains("slightly left") || line.contains("keep left") ||
+                    line.contains("левее") || line.contains("держитесь левее") ||
+                    line.contains("держитесь лев") ->
                     return "slight_left"
                 line.contains("чуть прав") || line.contains("плавно прав") || line.contains("slight right") ||
-                    line.contains("правее") || line.contains("держитесь правее") ->
+                    line.contains("slightly right") || line.contains("keep right") ||
+                    line.contains("правее") || line.contains("держитесь правее") ||
+                    line.contains("держитесь прав") ->
                     return "slight_right"
                 line.contains("налево") || line.contains("влево") ||
                     line.contains("поверните налево") || line.contains("turn left") ->

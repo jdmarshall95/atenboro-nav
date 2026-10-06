@@ -231,8 +231,10 @@ class NavNotificationListener : NotificationListenerService() {
     private fun pickBestIcon(results: List<ManeuverIconClassifier.Result>): ManeuverIconClassifier.Result? {
         if (results.isEmpty()) return null
         fun rank(r: ManeuverIconClassifier.Result): Int = when (r.turn) {
-            "left", "right", "slight_left", "slight_right" -> 3
-            "u_turn", "roundabout" -> 2
+            "u_turn" -> 4
+            "slight_left", "slight_right" -> 3
+            "left", "right" -> 3
+            "roundabout" -> 2
             "straight" -> 1
             else -> 0
         }
