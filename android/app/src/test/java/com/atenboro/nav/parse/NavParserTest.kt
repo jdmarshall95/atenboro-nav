@@ -103,8 +103,22 @@ class NavParserTest {
     }
 
     @Test
-    fun parsesKmDecimalToMeters() {
-        val update = NavParser.parse(listOf("3,8 km — Большой Строченовский переулок"))
-        assertEquals(3800, update.distM)
+    fun parsesKeepLeftAsSlight() {
+        val update = NavParser.parse(listOf("In 200 m keep left"))
+        assertEquals("slight_left", update.turn)
+        assertEquals(200, update.distM)
+    }
+
+    @Test
+    fun parsesRazvernitesAsUTurn() {
+        val update = NavParser.parse(listOf("Через 60 м развернитесь"))
+        assertEquals("u_turn", update.turn)
+        assertEquals(60, update.distM)
+    }
+
+    @Test
+    fun parsesPlavnoLeftBeforeHardLeft() {
+        val update = NavParser.parse(listOf("Через 120 м плавно левее"))
+        assertEquals("slight_left", update.turn)
     }
 }

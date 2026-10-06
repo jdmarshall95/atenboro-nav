@@ -159,21 +159,60 @@ object ManeuverIconClassifier {
             }
         }
 
-        // Угол направо: почти пустой BR, масса в TR + ствол слева/снизу
-        val cornerRight =
-            qBR < ink * 0.08f && qTR > ink * 0.22f && (qTL + qBL) > ink * 0.28f
-        val cornerLeft =
-            qBL < ink * 0.08f && qTL > ink * 0.22f && (qTR + qBR) > ink * 0.28f
-        if (cornerRight && !cornerLeft) return "right" to 0.9f
-        if (cornerLeft && !cornerRight) return "left" to 0.9f
+        val lr = (inkLeft - inkRight).toFloat() / ink
+        val tb = (inkTop - inkBottom).toFloat() / ink
+        val tipLr = (tipLeft - tipRight).toFloat() / max(tipLeft + tipRight, 1)
+        val tipPointsLeft = tipLeft < tipRight
+        val tipPointsRight = tipRight < tipLeft
+        val wide = bw / bh.coerceAtLeast(1f)
+        val tall = bh / bw.coerceAtLeast(1f)
 
-        // U-turn: петля сверху + ножка сбоку (часто пусто внизу-центре)
-        if (inkTop > inkBottom * 1.2f && fill in 0.12f..0.50f) {
-            val tall = bh / bw.coerceAtLeast(1f)
-            val sideHeavy = max(inkLeft, inkRight) > ink * 0.32f
-            if (tall > 0.9f && sideHeavy && inkCenter < ink * 0.22f) {
-                return "u_turn" to 0.75f
+        // Высота острия: только крайние 12% bbox по направлению tip (не всё V-крыло)
+        val tipEdge = (bw * 0.12f).coerceAtLeast(1f)
+        var tipYSum = 0L
+        var tipYCount = 0
+        for (y in minY..maxY step step) {
+            for (x in minX..maxX step step) {
+                if (!isForeground(src.getPixel(x, y), bgLum, bgIsLight)) continue
+                val atLeftTip = tipPointsLeft && x <= minX + tipEdge
+                val atRightTip = tipPointsRight && x >= maxX - tipEdge
+                val atTipByMass = !tipPointsLeft && !tipPointsRight && abs(tipLr) >= 0.12f &&
+                    ((tipLr < 0 && x <= minX + tipEdge) || (tipLr > 0 && x >= maxX - tipEdge))
+                if (!atLeftTip && !atRightTip && !atTipByMass) continue
+                tipYSum += y
+                tipYCount++
             }
+        }
+        val tipNy = if (tipYCount > 0) {
+            ((tipYSum.toFloat() / tipYCount) - minY) / bh.coerceAtLeast(1f)
+        } else {
+            0.5f
+        }
+        // tipNy мал → остриё сверху (диагональ / slight); mid → hard turn вбок
+        fun sideTurn(left: Boolean, conf: Float, preferHard: Boolean = false): Pair<String, Float> {
+            val slight = if (preferHard) {
+                tipNy < 0.22f || (tipNy < 0.30f && tb > 0.25f)
+            } else {
+                tipNy < 0.34f || (tipNy < 0.45f && tb > 0.20f)
+            }
+            return if (left) {
+                (if (slight) "slight_left" else "left") to conf
+            } else {
+                (if (slight) "slight_right" else "right") to conf
+            }
+        }
+
+        // U-turn: арка сверху + вертикальная ножка в той же половине вниз
+        // (не путать с диагональным slight: у него нет полной вертикали qB* на стороне арки)
+        val topArch = qTL > ink * 0.12f && qTR > ink * 0.12f && abs(qTL - qTR) < ink * 0.28f
+        val rightStem = qTR > ink * 0.10f && qBR > ink * 0.18f && qBL < ink * 0.07f &&
+            inkRight > inkLeft * 1.05f
+        val leftStem = qTL > ink * 0.10f && qBL > ink * 0.18f && qBR < ink * 0.07f &&
+            inkLeft > inkRight * 1.05f
+        if (topArch && (rightStem || leftStem) && fill in 0.10f..0.52f && tall >= 1.05f &&
+            inkTop >= ink * 0.42f
+        ) {
+            return "u_turn" to 0.82f
         }
 
         // Круговое / кольцо: много краёв, мало центра
@@ -181,59 +220,53 @@ object ManeuverIconClassifier {
             return "roundabout" to 0.7f
         }
 
-        val lr = (inkLeft - inkRight).toFloat() / ink
-        val tb = (inkTop - inkBottom).toFloat() / ink
-        // У шеврона масса у основания; остриё — сторона с меньшей tip-массой
-        val tipLr = (tipLeft - tipRight).toFloat() / max(tipLeft + tipRight, 1)
-        val tipPointsLeft = tipLeft < tipRight
-        val tipPointsRight = tipRight < tipLeft
-        val wide = bw / bh.coerceAtLeast(1f)
-        val tall = bh / bw.coerceAtLeast(1f)
+        // Угол 2ГИС (⌊→ / ⌋←): раньше всегда hard left/right — съедало slight
+        val cornerRight =
+            qBR < ink * 0.10f && qTR > ink * 0.18f && (qTL + qBL) > ink * 0.25f
+        val cornerLeft =
+            qBL < ink * 0.10f && qTL > ink * 0.18f && (qTR + qBR) > ink * 0.25f
+        if (cornerRight && !cornerLeft) return sideTurn(left = false, conf = 0.9f, preferHard = true)
+        if (cornerLeft && !cornerRight) return sideTurn(left = true, conf = 0.9f, preferHard = true)
 
-        // Горизонтальный шеврон: направление = остриё (против массы)
-        if (wide >= 0.85f && (tipPointsLeft || tipPointsRight || abs(lr) >= 0.10f || abs(tipLr) >= 0.12f)) {
+        // Горизонтальный / диагональный шеврон: направление = остриё (против массы)
+        if (wide >= 0.80f && (tipPointsLeft || tipPointsRight || abs(lr) >= 0.10f || abs(tipLr) >= 0.12f)) {
             val left = when {
                 tipPointsLeft && !tipPointsRight -> true
                 tipPointsRight && !tipPointsLeft -> false
                 abs(tipLr) >= abs(lr) && abs(tipLr) >= 0.12f -> tipLr < 0
                 else -> lr < 0
             }
-            // Не путать с вертикальным «прямо»: нужен явный боковой tip/масса
             if (abs(tipLr) >= 0.12f || abs(lr) >= 0.10f || tipPointsLeft || tipPointsRight) {
-                return if (left) {
-                    (if (tb > 0.18f) "slight_left" else "left") to 0.85f
-                } else {
-                    (if (tb > 0.18f) "slight_right" else "right") to 0.85f
-                }
+                return sideTurn(left, conf = 0.85f)
             }
         }
 
         // Явный боковой перевес массы → остриё на противоположной стороне
         if (lr > 0.22f || tipLr > 0.25f) {
-            return (if (tb > 0.15f) "slight_right" else "right") to 0.75f
+            return sideTurn(left = false, conf = 0.75f)
         }
         if (lr < -0.22f || tipLr < -0.25f) {
-            return (if (tb > 0.15f) "slight_left" else "left") to 0.75f
+            return sideTurn(left = true, conf = 0.75f)
         }
 
-        // Вертикальная «стрелка вверх»: только если правда узкая/высокая и баланс L/R
-        if (abs(lr) < 0.10f && abs(tipLr) < 0.12f && tall >= 1.05f && tb <= 0.30f) {
+        // Вертикальная «стрелка вверх»: узкая/высокая и баланс L/R
+        if (abs(lr) < 0.10f && abs(tipLr) < 0.12f && tall >= 1.05f && tipNy < 0.40f) {
             return "straight" to 0.7f
         }
 
         // Лёгкий дисбаланс — slight (масса напротив направления)
-        if (abs(lr) in 0.10f..0.22f && abs(tb) < 0.35f) {
-            return (if (lr > 0) "slight_right" else "slight_left") to 0.55f
+        if (abs(lr) in 0.08f..0.22f) {
+            return (if (lr > 0) "slight_right" else "slight_left") to 0.58f
         }
 
         // Слабый straight без уверенности — лучше none, чем ложный прямо
-        if (abs(lr) < 0.10f && abs(tipLr) < 0.12f) {
+        if (abs(lr) < 0.08f && abs(tipLr) < 0.12f) {
             return "straight" to 0.35f
         }
 
         return when {
-            lr > 0.08f -> "slight_right" to 0.45f
-            lr < -0.08f -> "slight_left" to 0.45f
+            lr > 0.05f -> "slight_right" to 0.45f
+            lr < -0.05f -> "slight_left" to 0.45f
             else -> "straight" to 0.3f
         }
     }
@@ -250,17 +283,19 @@ object ManeuverIconClassifier {
             0 to 0, (w - 1) to 0, 0 to (h - 1), (w - 1) to (h - 1)
         )
         for ((cx, cy) in corners) {
-            var found: Int? = null
-            for (d in 0..min(w, h) / 4) {
+            val corner = src.getPixel(cx, cy)
+            if (Color.alpha(corner) < 40) {
+                // Прозрачный угол 2ГИС — не шагаем внутрь (иначе сэмплим саму стрелку как «фон»)
+                continue
+            }
+            samples += luminance(corner)
+            // Небольшой соседний сэмпл только если угол уже непрозрачный
+            for (d in 1..min(3, min(w, h) / 8)) {
                 val x = (cx + if (cx == 0) d else -d).coerceIn(0, w - 1)
                 val y = (cy + if (cy == 0) d else -d).coerceIn(0, h - 1)
                 val c = src.getPixel(x, y)
-                if (Color.alpha(c) >= 40) {
-                    found = luminance(c)
-                    break
-                }
+                if (Color.alpha(c) >= 40) samples += luminance(c)
             }
-            if (found != null) samples += found
         }
         if (samples.isEmpty()) {
             // Полностью прозрачная рамка — типичная белая стрелка на прозрачном
