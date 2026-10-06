@@ -53,7 +53,20 @@ cd firmware
 
 Ожидание: `mWakefulness=Dozing`, в логах `locked-screen turn=… interactive=false`, OLED обновляется (в т.ч. мигание камеры).
 
-## 5. Симуляция заезда (`sim_route_drive`)
+## 5. Эмулятор + mock SoftAP (без реальной платы)
+
+На эмуляторе нет Wi‑Fi SoftAP; плюс на телефоне SoftAP часто рвёт интернет у 2ГИС. Для стенда поднимите mock HTTP-плату на хосте:
+
+```bash
+./scripts/mock_board.py          # слушает 0.0.0.0:18765
+./scripts/emu_mock_drive.sh      # setprop + inject сценарий
+```
+
+Эмулятор ходит на хост как `http://10.0.2.2:18765` (это задаёт `debug.atenboro.esp_url`). Сброс: `adb shell setprop debug.atenboro.esp_url ''` и force-stop приложения.
+
+На реальном телефоне с SoftAP: держите LTE, плату как secondary local-only («Подключить к плате» / `bindProcessToNetwork`) — иначе 2ГИС без интернета и HUD «молчит».
+
+## 6. Симуляция заезда (`sim_route_drive`)
 
 Скрипт [`scripts/sim_route_drive.sh`](../scripts/sim_route_drive.sh) гоняет сценарий без реальной поездки:
 
@@ -71,6 +84,12 @@ cd firmware
 
 Артефакты пишутся в `/tmp/atenboro-drive-…` (лог, session pull, разбор stutter/flip).
 
-## 6. Юнит-тесты парсера
+## 7. Юнит-тесты парсера
 
 В Android Studio: правый клик по `NavParserTest` → Run.
+
+Или:
+
+```bash
+cd android && ./gradlew :app:testDebugUnitTest
+```
