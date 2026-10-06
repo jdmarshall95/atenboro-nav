@@ -1,17 +1,22 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.8] — 2026-10-06
+
+### Fixed
+- Pocket icon classifier: slight / u-turn больше не схлопываются в hard left/right (угол 2ГИС + высота острия)
+- Текст notif: `keep left/right`, `развернитесь`, `плавно левее` до hard left/right
+- Камера: короткий sticky (~3.5 с), затем явный `camera=false` снимает алерт на OLED
+- Карманная дистанция на locked/Doze: countdown в т.ч. <30 м; poll нотификаций ~1 с
 
 ### Added
-- `scripts/gis_moto_drive.py`: mirror 2GIS A→B polyline, auto-tap Go, motorcycle-speed emulator GPS
+- `scripts/test_locked_long_route.sh` — длинный синтетический locked-прогон (экран остаётся Asleep)
+- `scripts/gis_moto_drive.py` — зеркало полилинии 2ГИС + GPS на эмуляторе
 
 ### Changed
-- Moto drive defaults: faster cruise (~85–90 km/h), resampled step along route
-- `mock_board.py` `DELETE /debug` also resets nav state (not only events)
-- Pocket distance: accept & forward countdown including <30 m; skip throttle on dist decrease; poll 2GIS notifications every 1 s (Doze often skips `onNotificationPosted`)
+- Версия линейки: **1.0.8** (Android `versionCode` / FW `FW_VERSION_CODE` = 108)
 
 ### Known
-- Pocket path: 2GIS ongoing notifications carry turn/distance but **not** camera/limit (EN 7.9.x lab). See README.
+- Камера/лимит из ongoing-notif 2ГИС на EN 7.9.x в лабе по-прежнему не приходит (см. README)
 
 ## [0.1.7] — 2026-10-06
 
@@ -53,9 +58,6 @@
 - OLED white block instead of turn arrow: mono icon now uses background-relative ink; dense fills fall back to built-in glyphs
 - Bottom HUD label shows street (ASCII) when available instead of LEFT/RIGHT
 - Reject over-dense icon payloads on firmware
-- Phone sends firmware glyph hex when 2GIS largeIcon mono is unusable (works even before board reflash)
-- Prefer largest notification bitmap for turn classification
-- adb inject: `am start … --es turn …` for board stage tests without fighting live 2GIS notifs
 
 ## [0.1.2] — 2026-09-29
 

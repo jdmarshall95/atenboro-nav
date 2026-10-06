@@ -4,7 +4,7 @@
 
 **2ГИС → OLED** на плате HW-364A (**ESP8266** + **SSD1306** 128×64 dual-color). Сейчас Wi‑Fi SoftAP; дальше — **ESP32** + BLE. Open source, MIT.
 
-[![Version](https://img.shields.io/badge/version-0.1.7-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
+[![Version](https://img.shields.io/badge/version-1.0.8-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square&labelColor=16181f)](LICENSE)
 
 Android-прокси читает манёвры 2ГИС (notification / Accessibility) и рисует turn-by-turn на OLED: шеврон, дистанция, мигающий лимит камеры.
@@ -186,9 +186,10 @@ curl -s -X POST http://192.168.4.1/nav \
 
 | Что | Статус |
 |-----|--------|
-| Манёвр + дистанция из ongoing-notif | работает (`N m — улица`, largeIcon); на Doze listener ещё и **poll раз в 1 с** (иначе `onNotificationPosted` редко) |
+| Манёвр + дистанция из ongoing-notif | работает (`N m — улица`, largeIcon); slight/u-turn из текста и иконки; на Doze poll ~1 с |
 | Дистанция на Locked OLED | фикс: countdown в т.ч. **<30 м** проходит; throttle не режет уменьшение `dist` |
-| Камера + лимит км/ч в том же notif | **не приходит** |
+| Снятие камеры на OLED | после ~3.5 с без `camera` в кадре алерт гаснет (раньше sticky навсегда) |
+| Камера + лимит км/ч в том же notif | **не приходит** из 2ГИС EN 7.9.x (отдельный блокер) |
 | Accessibility (Qt HUD) | почти пустой текст; на AVD служба ещё и не биндится через `settings put` |
 | Logcat tag `2GIS` / DomainSynthesizer clips | камерных клипов нет (EN 7.9.x) |
 | Сводка маршрута «7 rear-facing cameras» | только на экране выбора маршрута, не в карманном баннере |
