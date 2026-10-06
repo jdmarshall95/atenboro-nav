@@ -84,7 +84,39 @@ cd firmware
 
 Артефакты пишутся в `/tmp/atenboro-drive-…` (лог, session pull, разбор stutter/flip).
 
-## 7. Юнит-тесты парсера
+## 7. Мото-прогон по маршруту 2ГИС (`gis_moto_drive`)
+
+[`scripts/gis_moto_drive.py`](../scripts/gis_moto_drive.py) строит A→B, **дублирует полилинию** локально и кормит эмулятор GPS как мотоцикл (~48 км/ч, торможение в поворотах).
+
+1. Геометрия: `DGIS_API_KEY` → Routing API `transport=motorcycle`; иначе OSRM по тем же A/B (fallback).
+2. Deep link открывает маршрут в приложении 2ГИС.
+3. Автотап: чип **motorcycle** + зелёная **Go!** (поиск по скриншоту).
+4. Езда: `adb emu geo nmea` + `geo fix` + test-provider.
+
+```bash
+# Красноя площадь → Белорусская (дефолт)
+./scripts/gis_moto_drive.py
+
+# Точная геометрия 2ГИС
+DGIS_API_KEY=xxx ./scripts/gis_moto_drive.py --engine dgis
+
+# Уже сохранённый маршрут, без повторного open
+./scripts/gis_moto_drive.py --route-json /tmp/atenboro-moto-run2/route.json --skip-open --no-tap-go
+```
+
+Артефакты: `/tmp/atenboro-moto-…/route.json`, `route.csv`, скрины, `session-tail.txt`, `mock-final.json`.
+
+На экране «выбор маршрута» без автотапа: чип мото → **Go!** (примерно `851 1873` на Pixel 1080×2400).
+
+Быстрый прогон (камеры / lab):
+
+```bash
+./scripts/gis_moto_drive.py --step-m 80 --cruise-kmh 90
+```
+
+**Важно:** ускорение GPS не вытаскивает камеру из notif — в карманном баннере 2ГИС её сейчас нет (см. README → «Карманный режим и камеры»).
+
+## 8. Юнит-тесты парсера
 
 В Android Studio: правый клик по `NavParserTest` → Run.
 

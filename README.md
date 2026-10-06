@@ -124,7 +124,8 @@ SoftAP: `atenboro-nav` / `atenboro1` → `http://192.168.4.1`
 3. Навигация в 2ГИС (экран можно блокировать).
 
 Чеклист и locked-screen тест: [`docs/TESTING.md`](docs/TESTING.md).  
-Симуляция заезда (inject HUD / mock GPS): [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) — режимы `hud`, `geo`, `full`.
+Симуляция заезда (inject HUD / mock GPS): [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) — режимы `hud`, `geo`, `full`.  
+Мото по маршруту 2ГИС (полилиния + GPS): [`scripts/gis_moto_drive.py`](scripts/gis_moto_drive.py).
 
 **Эмулятор без платы** (mock SoftAP на хосте, LTE/интернет у AVD не трогаем):
 
@@ -161,6 +162,7 @@ curl -s -X POST http://192.168.4.1/nav \
 | [`docs/WIRING.md`](docs/WIRING.md) | пины |
 | [`docs/TESTING.md`](docs/TESTING.md) | чеклист |
 | [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) | симуляция заезда (hud/geo/full) |
+| [`scripts/gis_moto_drive.py`](scripts/gis_moto_drive.py) | маршрут 2ГИС → полилиния → GPS мотоциклом |
 | [`scripts/mock_board.py`](scripts/mock_board.py) | mock SoftAP HTTP для эмулятора |
 | [`scripts/emu_mock_drive.sh`](scripts/emu_mock_drive.sh) | inject против mock_board |
 | [`scripts/render_boot_gif.py`](scripts/render_boot_gif.py) | GIF splash для README |
@@ -175,6 +177,31 @@ curl -s -X POST http://192.168.4.1/nav \
 - На Android SoftAP часто отваливается, когда телефон видит знакомую сеть — это главный стимул уйти на BLE.
 - Карманный баннер `N km — улица` принимает длинные дистанции (раньше >8 км отбрасывались → на OLED всплывали «20–30 м»).
 - Для стенда без железа: [`scripts/mock_board.py`](scripts/mock_board.py) + `debug.atenboro.esp_url` (см. [`docs/TESTING.md`](docs/TESTING.md)).
+
+### Карманный режим и камеры (блокер)
+
+Смысл проекта: телефон **заблокирован в кармане**, на руле только OLED (поворот / метры / **камера с лимитом**).
+
+На эмуляторном прогоне 2ГИС → Atenboro (locked-screen / notification listener) сейчас так:
+
+| Что | Статус |
+|-----|--------|
+| Манёвр + дистанция из ongoing-notif | работает (`N m — улица`, largeIcon) |
+| Камера + лимит км/ч в том же notif | **не приходит** |
+| Accessibility (Qt HUD) | почти пустой текст; на AVD служба ещё и не биндится через `settings put` |
+| Logcat tag `2GIS` / DomainSynthesizer clips | камерных клипов нет (EN 7.9.x) |
+| Сводка маршрута «7 rear-facing cameras» | только на экране выбора маршрута, не в карманном баннере |
+
+Проверено скриптом [`scripts/gis_moto_drive.py`](scripts/gis_moto_drive.py) (deep link → Go → GPS ~90 км/ч по полилинии): mock SoftAP получал `turn`/`dist_m`, всегда `camera=false`.
+
+**Обходные пути (следующий заход):**
+
+1. RU-локаль / свежий APK 2ГИС — вдруг камера попадает в RemoteViews текстом.
+2. Отдельный канал: голос/TTS 2ГИС, файловые логи, TUGC `layers=camera` (события на карте ≠ HUD-алерт).
+3. Если notif принципиально без камеры — MediaProjection / OCR жёлтой полосы только при разблокировке (ломает идею кармана) или свой слой камер по GPS.
+4. Держать notif listener + FGS как основу манёвра; камеру добить отдельным источником, не надеясь на a11y Qt.
+
+Пока камера в кармане не закрыта — жёлтая полоса OLED на реальной езде может молчать, даже если 2ГИС на экране камеры рисует.
 
 ## Roadmap / железо
 

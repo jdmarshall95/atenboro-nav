@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `scripts/gis_moto_drive.py`: mirror 2GIS A→B polyline, auto-tap Go, motorcycle-speed emulator GPS
+
+### Changed
+- Moto drive defaults: faster cruise (~85–90 km/h), resampled step along route
+- `mock_board.py` `DELETE /debug` also resets nav state (not only events)
+
+### Known
+- Pocket path: 2GIS ongoing notifications carry turn/distance but **not** camera/limit (EN 7.9.x lab). See README.
+
 ## [0.1.7] — 2026-10-06
 
 ### Changed
