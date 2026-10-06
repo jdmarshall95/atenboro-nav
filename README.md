@@ -124,7 +124,8 @@ SoftAP: `atenboro-nav` / `atenboro1` → `http://192.168.4.1`
 3. Навигация в 2ГИС (экран можно блокировать).
 
 Чеклист и locked-screen тест: [`docs/TESTING.md`](docs/TESTING.md).  
-Симуляция заезда (inject HUD / mock GPS): [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) — режимы `hud`, `geo`, `full`.
+Симуляция заезда (inject HUD / mock GPS): [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) — режимы `hud`, `geo`, `full`.  
+Мото по маршруту 2ГИС (полилиния + GPS): [`scripts/gis_moto_drive.py`](scripts/gis_moto_drive.py).
 
 **Эмулятор без платы** (mock SoftAP на хосте, LTE/интернет у AVD не трогаем):
 
@@ -161,6 +162,7 @@ curl -s -X POST http://192.168.4.1/nav \
 | [`docs/WIRING.md`](docs/WIRING.md) | пины |
 | [`docs/TESTING.md`](docs/TESTING.md) | чеклист |
 | [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) | симуляция заезда (hud/geo/full) |
+| [`scripts/gis_moto_drive.py`](scripts/gis_moto_drive.py) | маршрут 2ГИС → полилиния → GPS мотоциклом |
 | [`scripts/mock_board.py`](scripts/mock_board.py) | mock SoftAP HTTP для эмулятора |
 | [`scripts/emu_mock_drive.sh`](scripts/emu_mock_drive.sh) | inject против mock_board |
 | [`scripts/render_boot_gif.py`](scripts/render_boot_gif.py) | GIF splash для README |
