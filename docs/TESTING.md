@@ -45,13 +45,22 @@ cd firmware
 
 ## 4. Заблокированный экран (карман)
 
-Ближе всего к реальной езде: SoftAP + FGS-прокси, экран `Dozing`, апдейты без Activity.
+Ближе всего к реальной езде: SoftAP + FGS-прокси, экран `Asleep`/`Dozing`, апдейты без Activity.
+
+Короткий smoke:
 
 ```bash
 ./scripts/test_locked_screen.sh
 ```
 
-Ожидание: `mWakefulness=Dozing`, в логах `locked-screen turn=… interactive=false`, OLED обновляется (в т.ч. мигание камеры).
+Длинный синтетический маршрут (жёстко требует `interactive=false` на каждом шаге, в конце **оставляет экран погашенным**):
+
+```bash
+./scripts/test_locked_long_route.sh
+# разбудить после прогона: UNLOCK_AFTER=1 ./scripts/test_locked_long_route.sh
+```
+
+Ожидание: `mWakefulness=Asleep|Dozing`, в логах `locked-inject … interactive=false`, дистанция на mock/OLED тикает до 0 м.
 
 ## 5. Эмулятор + mock SoftAP (без реальной платы)
 
