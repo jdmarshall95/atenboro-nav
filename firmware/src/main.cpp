@@ -121,17 +121,31 @@ const uint8_t *turnBitmap(Turn t) {
   }
 }
 
-/** Правая половина синего: только метры + «m», как просил HUD. */
-void formatMetersOnly(int meters, char *buf, size_t n) {
+/** HUD: <1 км — метры; 1–9.9 км — «3.8»+km; ≥10 км — целые км. */
+void formatHudDistance(int meters, char *num, size_t nNum, char *unit, size_t nUnit) {
   if (meters < 0) {
-    snprintf(buf, n, "--");
+    snprintf(num, nNum, "--");
+    snprintf(unit, nUnit, "m");
     return;
   }
-  if (meters > 9999) {
-    snprintf(buf, n, "9999");
-  } else {
-    snprintf(buf, n, "%d", meters);
+  if (meters >= 10000) {
+    snprintf(num, nNum, "%d", (meters + 500) / 1000);
+    snprintf(unit, nUnit, "km");
+    return;
   }
+  if (meters >= 1000) {
+    const int tenths = (meters + 50) / 100; // 3800 → 38 → «3.8»
+    snprintf(num, nNum, "%d.%d", tenths / 10, tenths % 10);
+    snprintf(unit, nUnit, "km");
+    return;
+  }
+  snprintf(num, nNum, "%d", meters);
+  snprintf(unit, nUnit, "m");
+}
+
+void formatMetersOnly(int meters, char *buf, size_t n) {
+  char unit[4];
+  formatHudDistance(meters, buf, n, unit, sizeof(unit));
 }
 
 void formatDistance(int meters, char *buf, size_t n) {
@@ -405,7 +419,8 @@ void drawBlueManeuverBand() {
   display.drawBitmap(ax, ay, turnBitmap(nav.turn), ARROW_W, ARROW_H, SSD1306_WHITE);
 
   char num[8];
-  formatMetersOnly(nav.dist_m, num, sizeof(num));
+  char unit[4];
+  formatHudDistance(nav.dist_m, num, sizeof(num), unit, sizeof(unit));
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(2);
   int16_t x1, y1;
@@ -415,9 +430,9 @@ void drawBlueManeuverBand() {
   display.setCursor(rightCx - (int)w / 2, BLUE_TOP + 10);
   display.print(num);
   display.setTextSize(1);
-  display.getTextBounds("m", 0, 0, &x1, &y1, &w, &h);
+  display.getTextBounds(unit, 0, 0, &x1, &y1, &w, &h);
   display.setCursor(rightCx - (int)w / 2, BLUE_TOP + 34);
-  display.print(F("m"));
+  display.print(unit);
 }
 
 void syncDrawnFromNav() {

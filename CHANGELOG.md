@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.7] — 2026-10-06
+
+### Changed
+- OLED distance: under 1 km meters; 1–9.9 km as `3.8` + `km`; 10 km+ as whole kilometers
+
+### Fixed
+- Pocket banners beyond 8 km were dropped (HUD showed junk ~20–30 m); prefer distance on the turn line over camera/ETA noise
+
+### Added
+- Host mock SoftAP (`scripts/mock_board.py`) + emulator inject via `debug.atenboro.esp_url`
+
 ## [0.1.6] — 2026-09-29
 
 ### Fixed
