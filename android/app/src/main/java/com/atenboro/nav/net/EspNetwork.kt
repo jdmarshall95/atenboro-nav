@@ -23,13 +23,48 @@ object EspNetwork {
     const val ESP_HOST = "192.168.4.1"
     const val ESP_PORT = 80
 
+    /**
+     * Эмулятор / mock-плата: `adb shell setprop debug.atenboro.esp_url http://10.0.2.2:18765`
+     * (хост-машина с scripts/mock_board.py). Пусто = реальный SoftAP.
+     */
+    fun espBaseUrl(): String {
+        val override = systemProperty("debug.atenboro.esp_url").trim().trimEnd('/')
+        return override.ifEmpty { "http://$ESP_HOST" }
+    }
+
+    fun espHostPort(): Pair<String, Int> {
+        val url = espBaseUrl()
+        return try {
+            val u = java.net.URI(url)
+            val host = u.host ?: ESP_HOST
+            val port = if (u.port > 0) u.port else ESP_PORT
+            host to port
+        } catch (_: Exception) {
+            ESP_HOST to ESP_PORT
+        }
+    }
+
+    private fun systemProperty(key: String): String =
+        runCatching {
+            Class.forName("android.os.SystemProperties")
+                .getMethod("get", String::class.java, String::class.java)
+                .invoke(null, key, "") as String
+        }.getOrDefault("")
+
     private val bound = AtomicReference<Network?>(null)
     private var requestCallback: ConnectivityManager.NetworkCallback? = null
 
     fun current(): Network? = bound.get()
 
+    /** Mock-плата на host/loopback — bind к SoftAP не нужен. */
+    fun isMockBoard(): Boolean {
+        val (host, _) = espHostPort()
+        return host == "10.0.2.2" || host == "127.0.0.1" || host == "localhost"
+    }
+
     /** Привязать процесс к уже подключённой сети, через которую пингуется ESP. */
     fun bindIfReachable(context: Context): Boolean {
+        if (isMockBoard()) return true
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         for (network in cm.allNetworks) {
             if (!canReachEsp(network)) continue
@@ -62,6 +97,7 @@ object EspNetwork {
      * @return true если сеть получена и ESP отвечает на TCP:80
      */
     suspend fun connectAndBind(context: Context): Boolean {
+        if (isMockBoard()) return true
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             return bindIfReachable(context)
         }
@@ -125,9 +161,10 @@ object EspNetwork {
     }
 
     private fun canReachEsp(network: Network): Boolean {
+        val (host, port) = espHostPort()
         return try {
             network.socketFactory.createSocket().use { socket ->
-                socket.connect(InetSocketAddress(ESP_HOST, ESP_PORT), 1500)
+                socket.connect(InetSocketAddress(host, port), 1500)
                 true
             }
         } catch (_: Exception) {

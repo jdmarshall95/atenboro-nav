@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity() {
                 debugStore.info("wifi connect tapped")
                 val ok = EspNetwork.connectAndBind(this@MainActivity)
                 if (ok && esp.health(this@MainActivity)) {
-                    binding.statusEsp.text = "ESP: онлайн (${EspClient.DEFAULT_BASE_URL})"
+                    binding.statusEsp.text = "ESP: онлайн (${EspClient.defaultBaseUrl()})"
                     binding.dotEsp.setBackgroundColor(Color.parseColor("#3DDC97"))
                     debugStore.info("esp online")
                     DebugSync(this@MainActivity, esp, debugStore).sync()
@@ -231,7 +231,7 @@ class MainActivity : AppCompatActivity() {
             while (isActive) {
                 val ok = esp.health(this@MainActivity)
                 if (ok) {
-                    binding.statusEsp.text = "ESP: онлайн (${EspClient.DEFAULT_BASE_URL})"
+                    binding.statusEsp.text = "ESP: онлайн (${EspClient.defaultBaseUrl()})"
                     binding.dotEsp.setBackgroundColor(Color.parseColor("#3DDC97"))
                 } else {
                     binding.statusEsp.text =

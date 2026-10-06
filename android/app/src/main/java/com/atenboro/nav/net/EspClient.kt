@@ -11,7 +11,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 class EspClient(
-    var baseUrl: String = DEFAULT_BASE_URL
+    var baseUrl: String = EspNetwork.espBaseUrl()
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
@@ -22,7 +22,12 @@ class EspClient(
 
     private val json = "application/json; charset=utf-8".toMediaType()
 
+    private fun refreshBaseUrl() {
+        baseUrl = EspNetwork.espBaseUrl()
+    }
+
     suspend fun health(context: Context? = null): Boolean = withContext(Dispatchers.IO) {
+        refreshBaseUrl()
         context?.let { EspNetwork.bindIfReachable(it) }
         try {
             val req = Request.Builder().url("$baseUrl/health").get().build()
@@ -34,6 +39,7 @@ class EspClient(
 
     suspend fun sendNav(update: NavUpdate, context: Context? = null): Result<Unit> =
         withContext(Dispatchers.IO) {
+            refreshBaseUrl()
             context?.let { EspNetwork.bindIfReachable(it) }
             try {
                 val body = update.toJson().toRequestBody(json)
@@ -51,6 +57,7 @@ class EspClient(
         }
 
     suspend fun getDebug(context: Context? = null): Result<String> = withContext(Dispatchers.IO) {
+        refreshBaseUrl()
         context?.let { EspNetwork.bindIfReachable(it) }
         try {
             val req = Request.Builder().url("$baseUrl/debug").get().build()
@@ -66,6 +73,7 @@ class EspClient(
 
     suspend fun postDebug(payload: String, context: Context? = null): Result<Unit> =
         withContext(Dispatchers.IO) {
+            refreshBaseUrl()
             context?.let { EspNetwork.bindIfReachable(it) }
             try {
                 val body = payload.toRequestBody(json)
@@ -83,6 +91,7 @@ class EspClient(
         }
 
     suspend fun clearDebug(context: Context? = null): Result<Unit> = withContext(Dispatchers.IO) {
+        refreshBaseUrl()
         context?.let { EspNetwork.bindIfReachable(it) }
         try {
             val req = Request.Builder().url("$baseUrl/debug").delete().build()
@@ -97,6 +106,7 @@ class EspClient(
 
     suspend fun getScreen(context: Context? = null): Result<ScreenCapture> =
         withContext(Dispatchers.IO) {
+            refreshBaseUrl()
             context?.let { EspNetwork.bindIfReachable(it) }
             try {
                 val req = Request.Builder().url("$baseUrl/screen").get().build()
@@ -125,6 +135,10 @@ class EspClient(
     )
 
     companion object {
+        /** Актуальный URL (учитывает debug.atenboro.esp_url для эмулятора). */
+        fun defaultBaseUrl(): String = EspNetwork.espBaseUrl()
+
+        @Deprecated("Use defaultBaseUrl()", ReplaceWith("EspClient.defaultBaseUrl()"))
         const val DEFAULT_BASE_URL = "http://${EspNetwork.ESP_HOST}"
     }
 }
