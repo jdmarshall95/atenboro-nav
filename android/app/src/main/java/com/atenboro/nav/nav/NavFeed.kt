@@ -16,12 +16,17 @@ import kotlinx.coroutines.sync.withLock
 /**
  * Единая точка публикации HUD на ESP.
  * Приоритет: notif (карман) > a11y/hud скрин.
+ *
+ * Дистанция: новое явное значение (>=0) всегда побеждает sticky —
+ * иначе на подъезде <30 м / при Doze залипала старая цифра (баг поля 0.1.6).
  */
 object NavFeed {
     private const val TAG = "AtenboroNavFeed"
     private const val THROTTLE_MS = 350L
     private const val HEARTBEAT_MS = 2000L
     private const val NOTIF_HOLD_MS = 10_000L
+    /** Верхняя граница «ещё манёвр», не весь маршрут (км). */
+    private const val DIST_USEFUL_MAX = 200_000
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val esp = EspClient()
@@ -37,9 +42,9 @@ object NavFeed {
     fun isUseful(u: NavUpdate): Boolean {
         if (u.camera) return true
         if (u.turn != "none") return true
-        if (!u.iconHex.isNullOrEmpty() && u.distM in 0..2_500) return true
-        // Карманный баннер «N m — улица» без манёвра всё же полезен (дистанция/улица)
-        if (u.distM in 30..2_500 && !u.street.isNullOrBlank()) return true
+        if (!u.iconHex.isNullOrEmpty() && u.distM in 0..DIST_USEFUL_MAX) return true
+        // Карман: явная дистанция в т.ч. <30 м (раньше отбрасывалась → OLED слал lastSent)
+        if (u.distM in 0..DIST_USEFUL_MAX && (u.navigating || !u.street.isNullOrBlank())) return true
         return false
     }
 
@@ -49,6 +54,8 @@ object NavFeed {
         lastNotif = null
         DebugStore.get(context).info("$source nav ended")
     }
+
+    fun isNavigating(): Boolean = navigating
 
     fun publish(context: Context, update: NavUpdate, source: String) {
         val store = DebugStore.get(context)
@@ -63,15 +70,17 @@ object NavFeed {
             lastNotif = update
         }
 
-        // a11y/hud не перебивают свежий карманный notif
+        // a11y/hud не перебивают свежий карманный notif — кроме countdown дистанции / усиления
         if (fromA11y && now - lastNotifAt < NOTIF_HOLD_MS) {
             val held = lastNotif
             if (held != null && isUseful(held)) {
-                // Разрешаем a11y только усилить уверенный манёвр/камеру, не затирать
                 val improved =
                     (update.turn != "none" && update.turn != "straight" && held.turn == "straight") ||
                         (update.camera && !held.camera) ||
-                        (update.distM in 0..2_500 && held.distM < 0)
+                        (update.distM in 0..DIST_USEFUL_MAX && held.distM < 0) ||
+                        // countdown: меньшая дистанция с a11y важнее залипшего notif
+                        (update.distM in 0..DIST_USEFUL_MAX && held.distM >= 0 &&
+                            update.distM < held.distM)
                 if (!improved) {
                     if (now - lastLogAt > 4_000) {
                         lastLogAt = now
@@ -107,6 +116,8 @@ object NavFeed {
             mutex.withLock {
                 val t = System.currentTimeMillis()
                 val prev = lastSent
+                val distDecreased =
+                    prev != null && toSend.distM >= 0 && prev.distM >= 0 && toSend.distM < prev.distM
                 val changed = prev == null ||
                     prev.turn != toSend.turn ||
                     prev.distM != toSend.distM ||
@@ -115,7 +126,8 @@ object NavFeed {
                     prev.camKmh != toSend.camKmh ||
                     prev.iconHex != toSend.iconHex ||
                     prev.street != toSend.street
-                if (t - lastSendAt < THROTTLE_MS) return@withLock
+                // Countdown не режем throttle — иначе на Locked OLED отстаёт
+                if (!distDecreased && t - lastSendAt < THROTTLE_MS) return@withLock
                 if (!changed && t - lastSendAt < HEARTBEAT_MS) return@withLock
 
                 lastSent = toSend
@@ -149,17 +161,17 @@ object NavFeed {
         var street = update.street
         var icon = update.iconHex
 
-        // Не даём слабому straight из a11y сбить боковой манёвр notif
         if (turn == "straight" && held.turn != "none" && held.turn != "straight") {
             turn = held.turn
             if (icon.isNullOrEmpty()) icon = held.iconHex
         }
         if (turn == "none" && held.turn != "none") turn = held.turn
 
-        if (held.distM in 0..2_500) {
-            if (dist < 0 || dist > held.distM * 2 && held.distM in 50..2_000) {
-                dist = held.distM
-            }
+        dist = mergeDistance(newDist = dist, prevDist = held.distM, allowCountdownFromNew = true)
+
+        // Если a11y без дистанции — берём notif; если a11y дальше notif ×2 — шум, держим notif
+        if (held.distM in 0..2_500 && update.distM > held.distM * 2 && held.distM in 50..2_000) {
+            dist = held.distM
         }
         if (street.isNullOrBlank() && !held.street.isNullOrBlank()) street = held.street
 
@@ -179,9 +191,7 @@ object NavFeed {
         var camKmh = update.camKmh
 
         if (turn == "none" && prev.turn != "none") {
-            // Не поднимаем старый манёвр поверх карманного баннера без иконки —
-            // иначе залипает ошибочный straight/left
-            val pocketOnly = update.distM in 30..2_500 && !update.street.isNullOrBlank()
+            val pocketOnly = update.distM in 0..DIST_USEFUL_MAX && !update.street.isNullOrBlank()
             if (!pocketOnly) turn = prev.turn
         }
         if (update.iconHex == "") {
@@ -189,7 +199,10 @@ object NavFeed {
         } else if (icon.isNullOrEmpty() && !prev.iconHex.isNullOrEmpty()) {
             icon = prev.iconHex
         }
-        if (dist < 0 && prev.distM >= 0) dist = prev.distM
+
+        // Явная новая дистанция всегда проходит (countdown / смена манёвра)
+        dist = mergeDistance(newDist = dist, prevDist = prev.distM, allowCountdownFromNew = true)
+
         if (street.isNullOrBlank() && !prev.street.isNullOrBlank()) street = prev.street
         if (!camera && prev.camera) {
             camera = true
@@ -209,5 +222,16 @@ object NavFeed {
             camKmh = camKmh,
             navigating = navigating || update.navigating
         )
+    }
+
+    /**
+     * @param allowCountdownFromNew если new>=0 — всегда new (в т.ч. меньше prev).
+     *   Иначе только заполняем дыру prev при new<0.
+     */
+    internal fun mergeDistance(newDist: Int, prevDist: Int, allowCountdownFromNew: Boolean = true): Int {
+        if (newDist >= 0 && allowCountdownFromNew) return newDist
+        if (newDist >= 0) return newDist
+        if (prevDist >= 0) return prevDist
+        return -1
     }
 }

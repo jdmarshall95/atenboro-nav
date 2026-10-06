@@ -8,6 +8,7 @@
 ### Changed
 - Moto drive defaults: faster cruise (~85–90 km/h), resampled step along route
 - `mock_board.py` `DELETE /debug` also resets nav state (not only events)
+- Pocket distance: accept & forward countdown including <30 m; skip throttle on dist decrease; poll 2GIS notifications every 1 s (Doze often skips `onNotificationPosted`)
 
 ### Known
 - Pocket path: 2GIS ongoing notifications carry turn/distance but **not** camera/limit (EN 7.9.x lab). See README.
