@@ -156,10 +156,15 @@ echo "" | tee -a "$REPORT"
 echo "final wakefulness=$FINAL_LOCK" | tee -a "$REPORT"
 echo "PASS=$PASS FAIL=$FAIL" | tee -a "$REPORT"
 
-# restore stay-on + wake for user
-$ADB shell settings put global stay_on_while_plugged_in "${PREV_STAY:-7}" >/dev/null
-unlock_swipe
-$ADB shell svc power stayon true >/dev/null 2>&1 || true
+# restore stay-on setting; keep display asleep unless UNLOCK_AFTER=1
+$ADB shell settings put global stay_on_while_plugged_in "${PREV_STAY:-0}" >/dev/null
+if [ "${UNLOCK_AFTER:-0}" = "1" ]; then
+  unlock_swipe
+  $ADB shell svc power stayon true >/dev/null 2>&1 || true
+else
+  sleep_display
+  echo "left locked: mWakefulness=$(wakefulness) (UNLOCK_AFTER=0)" | tee -a "$REPORT"
+fi
 
 # summarize interactive flags from logs
 echo "" >> "$REPORT"

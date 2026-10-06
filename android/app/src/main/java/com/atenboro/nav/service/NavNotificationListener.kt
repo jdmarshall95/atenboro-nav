@@ -30,11 +30,32 @@ import com.atenboro.nav.parse.RemoteViewsReader
 class NavNotificationListener : NotificationListenerService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val pollRunnable = object : Runnable {
+        override fun run() {
+            try {
+                // Doze/locked: 2ГИС часто не шлёт onNotificationPosted на каждый тик дистанции —
+                // периодически читаем activeNotifications сами.
+                activeNotifications
+                    ?.filter { it.packageName?.startsWith("ru.dublgis") == true }
+                    ?.forEach { handle(it, "poll") }
+            } catch (e: Exception) {
+                Log.d(TAG, "poll: ${e.message}")
+            }
+            mainHandler.postDelayed(this, POLL_MS)
+        }
+    }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
         DebugStore.get(this).info("notif listener connected")
         activeNotifications?.forEach { handle(it, "active") }
+        mainHandler.removeCallbacks(pollRunnable)
+        mainHandler.postDelayed(pollRunnable, POLL_MS)
+    }
+
+    override fun onListenerDisconnected() {
+        mainHandler.removeCallbacks(pollRunnable)
+        super.onListenerDisconnected()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -252,6 +273,7 @@ class NavNotificationListener : NotificationListenerService() {
 
     companion object {
         private const val TAG = "AtenboroNotif"
+        private const val POLL_MS = 1_000L
 
         fun settingsIntent(): Intent =
             Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
