@@ -21,7 +21,8 @@ object NavParser {
     )
 
     private val cameraPattern = Pattern.compile(
-        "камер|camera|radar|радар|контроль\\s*скорост",
+        "камер|camera|radar|радар|speed\\s*cam|speedcam|" +
+            "контроль\\s*скорост|стационарн|перед\\s+вами\\s+камер|впереди\\s+камер",
         Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE
     )
 
@@ -53,21 +54,25 @@ object NavParser {
             val l = line.lowercase(Locale("ru"))
             !routeSummaryLines.contains(line) && (
                 turnHint.matcher(l).find() ||
-                    extractDistancesMeters(line).any { it in 0..3_000 }
+                    extractDistancesMeters(line).any { it in 0..50_000 }
                 )
         }
 
         val turn = detectTurnPriority(maneuverLines.ifEmpty { cleanTexts })
 
+        val turnBearingLines = maneuverLines.filter { turnHint.matcher(it.lowercase(Locale("ru"))).find() }
+        val turnLineDistances = extractDistancesMeters(turnBearingLines.joinToString("\n"))
+            .filter { it <= 200_000 }
         val maneuverDistances = extractDistancesMeters(maneuverLines.joinToString("\n"))
-            .filter { it <= 5_000 }
+            .filter { it <= 200_000 }
         val fallbackDistances = extractDistancesMeters(
             cleanTexts.filterNot { routeSummaryLines.contains(it) }.joinToString("\n")
-        ).filter { it <= 5_000 }
+        ).filter { it <= 200_000 }
 
         // Баннер кармана — самый надёжный источник дистанции манёвра
         val distM = when {
             pocket != null -> pocket.distM
+            turnLineDistances.isNotEmpty() -> turnLineDistances.minOrNull()!!
             maneuverDistances.isNotEmpty() -> maneuverDistances.minOrNull()!!
             turn != "none" && fallbackDistances.isNotEmpty() -> fallbackDistances.minOrNull()!!
             else -> -1

@@ -21,7 +21,13 @@ object NavTextFilter {
         "complete the route", "complete route"
     )
 
-    /** Баннер кармана: «400 m — Большой Строченовский переулок» */
+    /** Длина всего маршрута без манёвра: «Осталось 17 км» */
+    private val totalRemainOnly = Regex(
+        """^осталось\s+\d{1,3}(?:[.,]\d)?\s*(км|km)\.?$""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** Баннер кармана: «400 m — …» / «3,8 km — …» / «12 km — …» */
     private val pocketBanner = Regex(
         """^(\d{1,4}(?:[.,]\d)?)\s*(м|m|км|km)\s*[—\-–]\s*(.+)$""",
         RegexOption.IGNORE_CASE
@@ -43,6 +49,7 @@ object NavTextFilter {
         val l = t.lowercase(Locale.ROOT)
         if (l in junkExact) return true
         if (junkContains.any { l.contains(it) }) return true
+        if (totalRemainOnly.matches(l)) return true
         // Чистое ETA без дистанции манёвра: «32 min», «29 мин»
         if (Regex("""^\d{1,3}\s*(min|мин|минут|минуты)\.?$""", RegexOption.IGNORE_CASE).matches(t)) {
             return true
@@ -61,7 +68,8 @@ object NavTextFilter {
                 unit.startsWith("к") || unit == "km" -> (value * 1000).toInt()
                 else -> value.toInt()
             }
-            if (meters !in 0..8_000) continue
+            // До ~200 км до манёвра (дальняк); раньше >8 км отбрасывались → на OLED «20–30 м»
+            if (meters !in 0..200_000) continue
             val street = m.groupValues[3].trim().take(60)
             if (street.length < 2) continue
             return PocketBanner(meters, street)

@@ -32,4 +32,27 @@ class NavTextFilterTest {
         assertTrue(NavTextFilter.isJunk("Search"))
         assertNull(NavTextFilter.parsePocketBanner(listOf("Update | Step by Step")))
     }
+
+    @Test
+    fun parsesPocketBannerKmDecimal() {
+        val b = NavTextFilter.parsePocketBanner(
+            listOf("3,8 km — Трасса М-4")
+        )
+        assertNotNull(b)
+        assertEquals(3800, b!!.distM)
+    }
+
+    @Test
+    fun parsesPocketBannerLongKm() {
+        val b = NavTextFilter.parsePocketBanner(
+            listOf("12 km — Каширское шоссе")
+        )
+        assertNotNull(b)
+        assertEquals(12000, b!!.distM)
+    }
+
+    @Test
+    fun dropsTotalRemainOnly() {
+        assertTrue(NavTextFilter.isJunk("Осталось 17 км"))
+    }
 }

@@ -73,6 +73,38 @@ class NavParserTest {
         )
         assertEquals("right", update.turn)
         assertEquals(400, update.distM)
-        assertEquals(listOf(400, 17000, 17000), update.allDistances)
+        // «Осталось 17 км» — junk; «17 км • 25 мин» остаётся в allDistances
+        assertEquals(listOf(400, 17000), update.allDistances)
+    }
+
+    @Test
+    fun prefersPocketLongDistanceOverNoiseMeters() {
+        val update = NavParser.parse(
+            listOf(
+                "12 km — Каширское шоссе",
+                "Update",
+                "32 min",
+                "Parking"
+            )
+        )
+        assertEquals(12000, update.distM)
+        assertEquals("Каширское шоссе", update.street)
+    }
+
+    @Test
+    fun parsesSlightRightAndCameraSpeed() {
+        val update = NavParser.parse(
+            listOf("Через 180 м держитесь правее", "Камера 60 км/ч через 90 м")
+        )
+        assertEquals("slight_right", update.turn)
+        assertEquals(180, update.distM)
+        assertTrue(update.camera)
+        assertEquals(60, update.camKmh)
+    }
+
+    @Test
+    fun parsesKmDecimalToMeters() {
+        val update = NavParser.parse(listOf("3,8 km — Большой Строченовский переулок"))
+        assertEquals(3800, update.distM)
     }
 }
