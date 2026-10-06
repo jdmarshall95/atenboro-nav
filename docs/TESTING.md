@@ -108,6 +108,14 @@ DGIS_API_KEY=xxx ./scripts/gis_moto_drive.py --engine dgis
 
 На экране «выбор маршрута» без автотапа: чип мото → **Go!** (примерно `851 1873` на Pixel 1080×2400).
 
+Быстрый прогон (камеры / lab):
+
+```bash
+./scripts/gis_moto_drive.py --step-m 80 --cruise-kmh 90
+```
+
+**Важно:** ускорение GPS не вытаскивает камеру из notif — в карманном баннере 2ГИС её сейчас нет (см. README → «Карманный режим и камеры»).
+
 ## 8. Юнит-тесты парсера
 
 В Android Studio: правый клик по `NavParserTest` → Run.

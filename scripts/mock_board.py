@@ -130,6 +130,14 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/debug"):
             with STATE["lock"]:
                 STATE["events"].clear()
+                STATE["nav"] = {
+                    "turn": "none",
+                    "dist_m": -1,
+                    "camera": False,
+                    "cam_m": -1,
+                    "cam_kmh": -1,
+                    "ts": 0,
+                }
             push_event("esp", "i", "debug cleared")
             self._json(200, {"ok": True})
             return

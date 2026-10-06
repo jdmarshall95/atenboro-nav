@@ -70,18 +70,25 @@ def bearing_deg(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 
 def densify(points: list[tuple[float, float]], step_m: float) -> list[tuple[float, float]]:
+    """Resample polyline to ~step_m spacing (subsample long chains; interpolate gaps)."""
     if len(points) < 2:
         return points
     out: list[tuple[float, float]] = [points[0]]
+    carry = 0.0
     for i in range(1, len(points)):
         a, b = points[i - 1], points[i]
-        dist = haversine_m(a, b)
-        if dist < 1e-3:
+        seg = haversine_m(a, b)
+        if seg < 1e-6:
             continue
-        n = max(1, int(math.ceil(dist / step_m)))
-        for k in range(1, n + 1):
-            t = k / n
+        # walk along segment emitting every step_m
+        dist_along = step_m - carry
+        while dist_along <= seg:
+            t = dist_along / seg
             out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+            dist_along += step_m
+        carry = seg - (dist_along - step_m)
+    if haversine_m(out[-1], points[-1]) > 1.0:
+        out.append(points[-1])
     return out
 
 
@@ -338,17 +345,16 @@ def enable_mock_provider() -> None:
     adb("shell", "cmd", "location", "providers", "set-test-provider-enabled", "atenboro", "true")
 
 
-def moto_speed_profile(i: int, n: int, turn_deg: float) -> float:
-    """City motorcycle: cruise 48, slow into sharp turns, ease out at ends."""
-    cruise = 48.0
-    if i < 8:
-        return 18.0 + i * 3.5
-    if i > n - 10:
-        return max(12.0, cruise - (i - (n - 10)) * 4.0)
+def moto_speed_profile(i: int, n: int, turn_deg: float, cruise: float) -> float:
+    """City motorcycle; cruise is typically 70–90 so cameras arm sooner."""
+    if i < 4:
+        return max(25.0, cruise * 0.4 + i * 8.0)
+    if i > n - 6:
+        return max(15.0, cruise - (i - (n - 6)) * 10.0)
     if turn_deg > 50:
-        return 28.0
+        return max(35.0, cruise * 0.55)
     if turn_deg > 25:
-        return 36.0
+        return max(45.0, cruise * 0.7)
     return cruise
 
 
@@ -356,19 +362,21 @@ def ride(
     points: list[tuple[float, float]],
     out_dir: Path,
     wait_start_s: float,
+    cruise_kmh: float = 85.0,
+    step_m: float = 35.0,
 ) -> None:
     enable_mock_provider()
     if wait_start_s > 0:
         log(f"wait {wait_start_s:.0f}s — start navigation in 2GIS (Поехали / Finish)")
         time.sleep(wait_start_s)
 
-    # snap to start and hold so app locks onto route
+    # snap to start briefly so app locks onto route
     lat0, lon0 = points[0]
-    push_gps(lat0, lon0, 0.0, 0.0)
-    time.sleep(2.0)
+    push_gps(lat0, lon0, cruise_kmh * 0.5, 0.0)
+    time.sleep(0.6)
 
     n = len(points)
-    log(f"ride begin points={n}")
+    log(f"ride begin points={n} cruise={cruise_kmh:.0f}km/h step≈{step_m:.0f}m")
     for i in range(n):
         lat, lon = points[i]
         if i + 1 < n:
@@ -380,14 +388,13 @@ def ride(
         else:
             brg = bearing_deg(points[i - 1], points[i]) if i else 0.0
             turn = 0.0
-        spd = moto_speed_profile(i, n, turn)
+        spd = moto_speed_profile(i, n, turn, cruise_kmh)
         push_gps(lat, lon, spd, brg)
-        if i % 25 == 0 or i == n - 1:
+        if i % 20 == 0 or i == n - 1:
             log(f"gps [{i+1}/{n}] {lat:.5f},{lon:.5f} {spd:.0f}km/h brg={brg:.0f}")
             screencap(out_dir / f"screen-{i+1:04d}.png")
-        # time for step_m at current speed (step densify ~12m → dt)
-        step_m = 12.0
-        dt = max(0.35, min(1.8, (step_m / max(spd, 8.0)) * 3.6))
+        # Physics dt for step at current speed, floored for fast lab runs
+        dt = max(0.12, min(0.55, (step_m / max(spd, 20.0)) * 3.6))
         time.sleep(dt)
     log("ride done")
 
@@ -421,12 +428,13 @@ def save_route(
     return path
 
 
-def load_route(path: Path) -> tuple[tuple[float, float], tuple[float, float], list[tuple[float, float]], str]:
+def load_route(path: Path) -> tuple[tuple[float, float], tuple[float, float], list[tuple[float, float]], list[tuple[float, float]], str]:
     doc = json.loads(path.read_text(encoding="utf-8"))
     frm = (doc["from"]["lat"], doc["from"]["lon"])
     to = (doc["to"]["lat"], doc["to"]["lon"])
     pts = [(p["lat"], p["lon"]) for p in doc["points"]]
-    return frm, to, pts, doc.get("engine", "file")
+    raw = [(p["lat"], p["lon"]) for p in doc.get("raw_points") or doc["points"]]
+    return frm, to, pts, raw, doc.get("engine", "file")
 
 
 def main(argv: Iterable[str] | None = None) -> int:
@@ -434,7 +442,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     ap.add_argument("--from", dest="frm", default=f"{DEFAULT_FROM[0]},{DEFAULT_FROM[1]}")
     ap.add_argument("--to", dest="to", default=f"{DEFAULT_TO[0]},{DEFAULT_TO[1]}")
     ap.add_argument("--engine", choices=("auto", "dgis", "osrm"), default="auto")
-    ap.add_argument("--step-m", type=float, default=12.0, help="densify step along route")
+    ap.add_argument("--step-m", type=float, default=40.0, help="densify step along route (larger = fewer/faster ticks)")
+    ap.add_argument("--cruise-kmh", type=float, default=85.0, help="motorcycle cruise speed for GPS feed")
     ap.add_argument("--out", default="", help="artifact dir (default /tmp/atenboro-moto-...)")
     ap.add_argument("--route-json", default="", help="reuse saved route.json")
     ap.add_argument("--skip-open", action="store_true", help="do not open deep link in 2GIS")
@@ -447,8 +456,9 @@ def main(argv: Iterable[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.route_json:
-        frm, to, dense, engine = load_route(Path(args.route_json))
-        log(f"loaded route engine={engine} points={len(dense)}")
+        frm, to, _dense_old, raw, engine = load_route(Path(args.route_json))
+        dense = densify(raw, args.step_m)
+        log(f"loaded route engine={engine} raw={len(raw)} → dense={len(dense)} step={args.step_m}m")
     else:
         frm = parse_latlon(args.frm)
         to = parse_latlon(args.to)
@@ -482,7 +492,13 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 0
 
     # GPS feed starts immediately after Go (or after wait if --no-tap-go)
-    ride(dense, out_dir, wait_start_s=0.0 if not args.no_tap_go else args.wait_start)
+    ride(
+        dense,
+        out_dir,
+        wait_start_s=0.0 if not args.no_tap_go else args.wait_start,
+        cruise_kmh=args.cruise_kmh,
+        step_m=args.step_m,
+    )
 
     # dump atenboro + mock snapshots
     sess = adb(
