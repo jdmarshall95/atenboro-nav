@@ -186,8 +186,8 @@ curl -s -X POST http://192.168.4.1/nav \
 
 | Что | Статус |
 |-----|--------|
-- Манёвр + дистанция из ongoing-notif | работает (`N m — улица`, largeIcon); на Doze listener ещё и **poll раз в 1 с** (иначе `onNotificationPosted` редко) |
-- Дистанция на Locked OLED | фикс 0.1.7+: countdown <30 м больше не отбрасывается `isUseful`; throttle не режет уменьшение `dist` |
+| Манёвр + дистанция из ongoing-notif | работает (`N m — улица`, largeIcon); на Doze listener ещё и **poll раз в 1 с** (иначе `onNotificationPosted` редко) |
+| Дистанция на Locked OLED | фикс: countdown в т.ч. **<30 м** проходит; throttle не режет уменьшение `dist` |
 | Камера + лимит км/ч в том же notif | **не приходит** |
 | Accessibility (Qt HUD) | почти пустой текст; на AVD служба ещё и не биндится через `settings put` |
 | Logcat tag `2GIS` / DomainSynthesizer clips | камерных клипов нет (EN 7.9.x) |
