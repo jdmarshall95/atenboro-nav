@@ -28,11 +28,28 @@ STATE = {
         "camera": False,
         "cam_m": -1,
         "cam_kmh": -1,
+        "cam_pct": -1,
         "ts": 0,
     },
     "events": [],
     "lock": threading.Lock(),
 }
+
+# Поля /nav, которые плата хранит и отдаёт в /debug и /screen.
+NAV_KEYS = (
+    "turn",
+    "dist_m",
+    "camera",
+    "cam_m",
+    "cam_kmh",
+    "cam_pct",
+    "nav_mode",
+    "progress",
+    "tl",
+    "tl_s",
+    "jam_min",
+    "ts",
+)
 
 # Empty 128×64 SSD1306 framebuffer (1024 bytes)
 EMPTY_SCREEN = bytes(1024)
@@ -87,7 +104,8 @@ class Handler(BaseHTTPRequestHandler):
             meta = (
                 f"turn={nav.get('turn')};dist={nav.get('dist_m')};"
                 f"cam={1 if nav.get('camera') else 0};"
-                f"cam_kmh={nav.get('cam_kmh')};cam_m={nav.get('cam_m')};ver=mock"
+                f"cam_kmh={nav.get('cam_kmh')};cam_m={nav.get('cam_m')};"
+                f"cam_pct={nav.get('cam_pct')};ver=mock"
             )
             body = EMPTY_SCREEN
             self.send_response(200)
@@ -106,11 +124,13 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/nav"):
             doc = self._read_json()
             with STATE["lock"]:
-                for k in ("turn", "dist_m", "camera", "cam_m", "cam_kmh", "ts"):
+                for k in NAV_KEYS:
                     if k in doc:
                         STATE["nav"][k] = doc[k]
                 nav = dict(STATE["nav"])
             msg = f"nav {nav.get('turn')} {nav.get('dist_m')}m cam={nav.get('camera')}"
+            if nav.get("cam_pct", -1) >= 0:
+                msg += f" pct={nav.get('cam_pct')}"
             push_event("phone", "i", msg)
             push_event("esp", "i", "mock ok")
             print(f"[mock_board] NAV {json.dumps(nav, ensure_ascii=False)}")
@@ -136,6 +156,7 @@ class Handler(BaseHTTPRequestHandler):
                     "camera": False,
                     "cam_m": -1,
                     "cam_kmh": -1,
+                    "cam_pct": -1,
                     "ts": 0,
                 }
             push_event("esp", "i", "debug cleared")
