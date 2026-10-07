@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.0.9] — 2026-10-07
+
+### Added
+- **2GIS Dashboard AIDL API** — официальный структурированный канал данных навигации:
+  bind `ru.dublgis.api.ACTION_BIND_DASHBOARD_INFORMATION_SERVICE`,
+  push-колбэк `IUpdateCallback.onDataUpdated()` + `getDashboardInformationJSON()`.
+- `GisDashboardClient` — bind/reconnect (5 с, `onBindingDied`/`onNullBinding`), выбор пакета
+  (`dgismobile` → `dgismobile4preview` → `urbi`), первый снапшот сразу после коннекта.
+- `GisDashboardInfo` — разбор JSON с учётом границ версий API: 7.16 манёвр/прогресс,
+  7.18 `speedLimit` (**м/с** → км/ч) и камеры, 7.21.7 пробки, 7.24.95 светофор.
+- `GisManeuverCodenames` — каталог кодовых имён манёвров 2ГИС → токены прошивки
+  (`left/right/slight_*/u_turn/straight/roundabout/arrive`);
+  неизвестный кодоным угадывается по подстроке и логируется как «new codename».
+- POST `/nav`: `cam_pct`, `nav_mode`, `progress`, `tl`, `tl_s`, `jam_min`.
+- Прошивка: жёлтая полоса показывает `CAM 45%`, когда из API пришёл только процент
+  приближения к камере (метр 2ГИС не отдаёт); перерисовка по шагу 5%.
+- Статус-строка **«2GIS API»** на главном экране (подключено / нет связи).
+- Юнит-тесты `GisManeuverCodenamesTest` (8) и `GisDashboardInfoTest` (14, Robolectric ради `org.json`).
+
+### Changed
+- Приоритет источников в `NavFeed`: **aidl > notif (карман) > a11y/hud** — AIDL не проигрывает
+  залипшему notif; ветка `fromAidl` идёт своим ранним выходом, arbitration notif↔a11y не тронут.
+- `buildFeatures { aidl = true }`, `<queries>` для package visibility (Android 11+).
+- Превью и Parser debug показывают режим навигации, прогресс, светофор и процент камеры.
+
+### Verified
+- Pixel 7 (`35051FDH20048G`) + 2ГИС `7.29.1.632.4`: сервис
+  `ru.dublgis.api.DashboardInformationService` реально экспортируется под action bind,
+  версия сборки выше всех границ API (камера и светофор доступны).
+- Прогон на живом устройстве + `scripts/mock_board.py` как принимающая плата (порт 18765,
+  `adb reverse` + `debug.atenboro.esp_url=http://127.0.0.1:18765`): bind подтверждён на уровне
+  системы (`ServiceRecord{… DashboardInformationService c:com.atenboro.nav}`), статус-строка
+  показывает «2GIS API: подключено (Dashboard AIDL)», данные 2ГИС доходят до экрана и до платы —
+  в `/debug` прилетают `nav_mode`, `progress`, `cam_kmh` (уже конвертированный из м/с).
+- Инжектом проверены новые поля: `--ei cam_pct 45 --es nav_mode motorcycle --ei progress 37
+  --es tl green --ei tl_s 7` → плата приняла `cam_pct: 45, progress: 37, tl: green, tl_s: 7`.
+
+### Known
+- AIDL не отдаёт дистанцию камеры в метрах — только `trafficCameraDistancePercent`
+  (0→100 по мере приближения), поэтому `cam_m` из этого источника всегда `-1`.
+- Каталог кодовых имён манёвров — алфавитная выборка: базовые `left/right/straight` в нём не
+  перечислены, таблица дополнена вручную + есть fallback-эвристика.
+
 ## [1.0.8] — 2026-10-06
 
 ### Fixed

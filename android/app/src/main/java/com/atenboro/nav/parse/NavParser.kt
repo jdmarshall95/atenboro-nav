@@ -168,7 +168,7 @@ object NavParser {
         return "none"
     }
 
-    private fun extractDistancesMeters(text: String): List<Int> {
+    internal fun extractDistancesMeters(text: String): List<Int> {
         if (text.isBlank()) return emptyList()
         val out = mutableListOf<Int>()
         val matcher = distPattern.matcher(text)
