@@ -46,6 +46,7 @@ struct NavState {
   bool camera = false;
   int cam_m = -1;
   int cam_kmh = -1; // лимит камеры, км/ч (−1 = нет)
+  int cam_pct = -1; // 2GIS AIDL: 0..100 приближения к камере (−1 = нет)
   uint32_t last_update_ms = 0;
   bool has_data = false;
   bool has_icon = false;
@@ -60,6 +61,7 @@ struct DrawnNav {
   bool camera = false;
   int cam_m = -999;
   int cam_kmh = -999;
+  int cam_pct = -999;
   bool cam_blink_on = false;
 };
 
@@ -401,6 +403,15 @@ void drawYellowCameraBand() {
     display.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
     display.setCursor((SCREEN_W - (int)w) / 2, 4);
     display.print(buf);
+  } else if (nav.cam_pct >= 0) {
+    // 2GIS AIDL отдаёт только процент приближения — рисуем «CAM 45%»
+    snprintf(buf, sizeof(buf), "CAM %d%%", nav.cam_pct > 100 ? 100 : nav.cam_pct);
+    display.setTextSize(1);
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((SCREEN_W - (int)w) / 2, 4);
+    display.print(buf);
   } else {
     display.setTextSize(1);
     display.setCursor(50, 4);
@@ -435,6 +446,11 @@ void drawBlueManeuverBand() {
   display.print(unit);
 }
 
+// 2GIS AIDL отдаёт процент приближения к камере, который может меняться
+// на каждом обновлении. Перерисовываем полосу только при заметном изменении
+// (шаг 5%), иначе OLED моргает от мелкого дрожания значения.
+int pctBucket(int pct) { return pct < 0 ? -1 : pct / 5; }
+
 void syncDrawnFromNav() {
   drawn.valid = true;
   drawn.turn = nav.turn;
@@ -442,6 +458,7 @@ void syncDrawnFromNav() {
   drawn.camera = nav.camera;
   drawn.cam_m = nav.cam_m;
   drawn.cam_kmh = nav.cam_kmh;
+  drawn.cam_pct = nav.cam_pct;
   drawn.cam_blink_on = camBlinkOn;
 }
 
@@ -461,7 +478,8 @@ void drawNavSmart(bool forceYellow) {
 
   const bool distChanged = drawn.dist_m != nav.dist_m;
   const bool camChanged = drawn.camera != nav.camera || drawn.cam_m != nav.cam_m ||
-      drawn.cam_kmh != nav.cam_kmh;
+      drawn.cam_kmh != nav.cam_kmh ||
+      pctBucket(drawn.cam_pct) != pctBucket(nav.cam_pct);
   const bool turnChanged = drawn.turn != nav.turn;
   const bool blinkChanged = forceYellow && drawn.cam_blink_on != camBlinkOn;
 
@@ -682,6 +700,11 @@ void handleNav() {
     nav.cam_kmh = doc["cam_kmh"].as<int>();
   } else {
     nav.cam_kmh = -1;
+  }
+  if (doc["cam_pct"].is<int>()) {
+    nav.cam_pct = doc["cam_pct"].as<int>();
+  } else {
+    nav.cam_pct = -1;
   }
 
   // Иконки 2ГИС больше не рисуем — только встроенные стрелки нового HUD

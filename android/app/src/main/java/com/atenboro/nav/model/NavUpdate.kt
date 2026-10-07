@@ -9,6 +9,8 @@ data class NavUpdate(
     val camM: Int = -1,
     /** Лимит скорости камеры, км/ч (−1 = нет) */
     val camKmh: Int = -1,
+    /** 2GIS AIDL: 0..100 приближения к камере (−1 = нет данных) */
+    val camPct: Int = -1,
     val ts: Long = System.currentTimeMillis() / 1000,
     val rawSnippet: String = "",
     val allDistances: List<Int> = emptyList(),
@@ -17,6 +19,16 @@ data class NavUpdate(
     val iconHex: String? = null,
     val street: String? = null,
     val navigating: Boolean = false,
+    /** 2GIS AIDL: activeNavigationMode ("" = не активна, "motorcycle" и т.д.) */
+    val navMode: String = "",
+    /** 2GIS AIDL: 0..100 прохождения маршрута */
+    val progress: Int = -1,
+    /** 2GIS AIDL: red / green / yellow ("") */
+    val trafficLightColor: String = "",
+    /** 2GIS AIDL: секунды до сигнала (−1 = прятать) */
+    val trafficLightCountdown: Int = -1,
+    /** 2GIS AIDL: минуты пробки (−1 = нет) */
+    val jamMin: Int = -1,
     val httpStatus: String = "Ожидание",
     val lastError: String? = null
 ) {
@@ -24,6 +36,12 @@ data class NavUpdate(
         val cam = if (camera) "true" else "false"
         val sb = StringBuilder(180 + (iconHex?.length ?: 0))
         sb.append("""{"turn":"$turn","dist_m":$distM,"camera":$cam,"cam_m":$camM,"cam_kmh":$camKmh,"ts":$ts""")
+        if (camPct in 0..100) sb.append(""","cam_pct":$camPct""")
+        if (navMode.isNotBlank()) sb.append(""","nav_mode":"$navMode"""")
+        if (progress in 0..100) sb.append(""","progress":$progress""")
+        if (trafficLightColor.isNotBlank()) sb.append(""","tl":"$trafficLightColor"""")
+        if (trafficLightCountdown >= 0) sb.append(""","tl_s":$trafficLightCountdown""")
+        if (jamMin > 0) sb.append(""","jam_min":$jamMin""")
         if (!iconHex.isNullOrEmpty()) {
             sb.append(""","icon_w":32,"icon_h":32,"icon":"$iconHex"""")
         }
@@ -42,8 +60,10 @@ data class NavUpdate(
     fun previewText(): String {
         val dist = if (distM >= 0) "$distM м" else "—"
         val cam = when {
+            camera && camKmh > 0 && camPct in 0..100 -> "да (${camKmh} км/ч, $camPct%)"
             camera && camKmh > 0 -> "да (${camKmh} км/ч)"
             camera && camM >= 0 -> "да ($camM м)"
+            camera && camPct in 0..100 -> "да ($camPct%)"
             camera -> "да"
             else -> "нет"
         }
@@ -58,7 +78,16 @@ data class NavUpdate(
             "arrive" -> "прибытие"
             else -> "нет"
         }
-        return "Поворот: $turnRu ($turn)\nДистанция: $dist\nКамера: $cam\nHTTP статус: $httpStatus"
+        val extra = StringBuilder()
+        if (navMode.isNotBlank()) extra.append("Режим: ").append(navMode).append("\n")
+        if (progress in 0..100) extra.append("Прогресс маршрута: ").append(progress).append("%\n")
+        if (trafficLightColor.isNotBlank()) {
+            extra.append("Светофор: ").append(trafficLightColor)
+            if (trafficLightCountdown >= 0) extra.append(" (").append(trafficLightCountdown).append(" с")
+            extra.append(")\n")
+        }
+        return "Поворот: $turnRu ($turn)\nДистанция: $dist\nКамера: $cam\n" +
+            extra.toString() + "HTTP статус: $httpStatus"
     }
 
     fun debugDetailsText(): String {
@@ -68,7 +97,15 @@ data class NavUpdate(
         sb.append("Определён поворот: ").append(turn).append("\n")
         sb.append("Дистанция маневра: ").append(if (distM >= 0) "$distM м" else "не найдена").append("\n")
         sb.append("Камера: ").append(camera)
-            .append(" (dist: ").append(camM).append(" м, speed: ").append(camKmh).append(" км/ч)\n")
+            .append(" (dist: ").append(camM).append(" м, speed: ").append(camKmh).append(" км/ч")
+            .append(", pct: ").append(camPct).append(")\n")
+        if (navMode.isNotBlank()) {
+            sb.append("AIDL: mode=").append(navMode)
+                .append(", progress=").append(progress)
+                .append(", tl=").append(trafficLightColor.ifBlank { "—" })
+                .append(", tl_s=").append(trafficLightCountdown)
+                .append(", jam_min=").append(jamMin).append("\n")
+        }
         sb.append("Все найденные дистанции: ").append(if (allDistances.isEmpty()) "нет" else allDistances.joinToString { "$it м" }).append("\n")
         if (lastError != null) {
             sb.append("Ошибка ESP: ").append(lastError).append("\n")

@@ -4,17 +4,18 @@
 
 **2ГИС → OLED** на плате HW-364A (**ESP8266** + **SSD1306** 128×64 dual-color). Сейчас Wi‑Fi SoftAP; дальше — **ESP32** + BLE. Open source, MIT.
 
-[![Version](https://img.shields.io/badge/version-1.0.8-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
+[![Version](https://img.shields.io/badge/version-1.0.9-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square&labelColor=16181f)](LICENSE)
 
-Android-прокси читает манёвры 2ГИС (notification / Accessibility) и рисует turn-by-turn на OLED: шеврон, дистанция, мигающий лимит камеры.
+Android-прокси читает манёвры 2ГИС через **Dashboard AIDL API** (запасные каналы — notification / Accessibility) и рисует turn-by-turn на OLED: шеврон, дистанция, мигающий лимит камеры.
 
 <p align="center">
   <img src="docs/screens/boot.gif" alt="Atenboro Nav — OLED splash на ESP8266" width="520" />
 </p>
 
 ```
-2ГИС ──► Atenboro (Android) ── SoftAP ──► ESP8266 OLED
+2ГИС ── AIDL Dashboard API ──► Atenboro (Android) ── SoftAP ──► ESP8266 OLED
+        (запас: notif / a11y)
 ```
 
 ## OLED HUD
@@ -65,6 +66,7 @@ Android-прокси читает манёвры 2ГИС (notification / Accessi
 | 2 | Статус ESP | SoftAP / HTTP до платы |
 | 3 | **Подключить к плате** | `bindProcessToNetwork` на `atenboro-nav` |
 | 4 | Accessibility | Чтение окон/HUD 2ГИС |
+| 4b | **2GIS API** | Dashboard AIDL: подключено / нет связи |
 | 5 | Превью OLED | Поворот, метры, камера, HTTP |
 | 6 | Parser debug | Сырой разбор 2ГИС |
 | 7 | Копировать / Dump | Буфер обмена или dump a11y |
@@ -141,7 +143,7 @@ SoftAP: `atenboro-nav` / `atenboro1` → `http://192.168.4.1`
 | Метод | Путь | Описание |
 |-------|------|----------|
 | `GET` | `/health` | версия |
-| `POST` | `/nav` | `turn`, `dist_m`, `camera`, `cam_m`, `cam_kmh` |
+| `POST` | `/nav` | `turn`, `dist_m`, `camera`, `cam_m`, `cam_kmh` + `cam_pct`, `nav_mode`, `progress`, `tl`, `tl_s`, `jam_min` |
 | `GET` | `/screen` | framebuffer + meta |
 | `*` | `/debug` | лог телефон ↔ плата |
 
@@ -178,9 +180,22 @@ curl -s -X POST http://192.168.4.1/nav \
 - Карманный баннер `N km — улица` принимает длинные дистанции (раньше >8 км отбрасывались → на OLED всплывали «20–30 м»).
 - Для стенда без железа: [`scripts/mock_board.py`](scripts/mock_board.py) + `debug.atenboro.esp_url` (см. [`docs/TESTING.md`](docs/TESTING.md)).
 
-### Карманный режим и камеры (блокер)
+### Карманный режим и камеры
 
 Смысл проекта: телефон **заблокирован в кармане**, на руле только OLED (поворот / метры / **камера с лимитом**).
+
+**Решение (1.0.9):** **Dashboard AIDL API** от 2ГИС — приложение биндится к
+`ru.dublgis.api.DashboardInformationService` и получает манёвр, лимит скорости, камеры,
+прогресс маршрута и светофор структурированно, без разбора текста и без скриншотов.
+Проверено на Pixel 7 с 2ГИС `7.29.1.632.4`: сервис экспортируется под
+`ru.dublgis.api.ACTION_BIND_DASHBOARD_INFORMATION_SERVICE`, версия сборки покрывает все
+поля API, т.е. доступны и камеры, и светофор.
+
+Ограничение API: дистанция камеры приходит только как **процент приближения**
+(`trafficCameraDistancePercent`, 0→100), метров нет — на OLED в этом случае жёлтая полоса
+показывает `CAM 45%`.
+
+История блокера (пути notif/a11y, которые остаются запасными):
 
 На эмуляторном прогоне 2ГИС → Atenboro (locked-screen / notification listener) сейчас так:
 
@@ -189,14 +204,14 @@ curl -s -X POST http://192.168.4.1/nav \
 | Манёвр + дистанция из ongoing-notif | работает (`N m — улица`, largeIcon); slight/u-turn из текста и иконки; на Doze poll ~1 с |
 | Дистанция на Locked OLED | фикс: countdown в т.ч. **<30 м** проходит; throttle не режет уменьшение `dist` |
 | Снятие камеры на OLED | после ~3.5 с без `camera` в кадре алерт гаснет (раньше sticky навсегда) |
-| Камера + лимит км/ч в том же notif | **не приходит** из 2ГИС EN 7.9.x (отдельный блокер) |
+| Камера + лимит км/ч в том же notif | **не приходит** из 2ГИС EN 7.9.x → закрыто Dashboard AIDL API |
 | Accessibility (Qt HUD) | почти пустой текст; на AVD служба ещё и не биндится через `settings put` |
 | Logcat tag `2GIS` / DomainSynthesizer clips | камерных клипов нет (EN 7.9.x) |
 | Сводка маршрута «7 rear-facing cameras» | только на экране выбора маршрута, не в карманном баннере |
 
 Проверено скриптом [`scripts/gis_moto_drive.py`](scripts/gis_moto_drive.py) (deep link → Go → GPS ~90 км/ч по полилинии): mock SoftAP получал `turn`/`dist_m`, всегда `camera=false`.
 
-**Обходные пути (следующий заход):**
+**Обходные пути (актуальны, если AIDL недоступен — старый APK 2ГИС < 7.16 или другой пакет):**
 
 1. RU-локаль / свежий APK 2ГИС — вдруг камера попадает в RemoteViews текстом.
 2. Отдельный канал: голос/TTS 2ГИС, файловые логи, TUGC `layers=camera` (события на карте ≠ HUD-алерт).
@@ -204,6 +219,42 @@ curl -s -X POST http://192.168.4.1/nav \
 4. Держать notif listener + FGS как основу манёвра; камеру добить отдельным источником, не надеясь на a11y Qt.
 
 Пока камера в кармане не закрыта — жёлтая полоса OLED на реальной езде может молчать, даже если 2ГИС на экране камеры рисует.
+
+### 2GIS Dashboard AIDL API
+
+Контракт (полностью — в [`android/app/src/main/aidl/ru/dublgis/api/`](android/app/src/main/aidl/ru/dublgis/api/)):
+
+| | |
+|--|--|
+| Action | `ru.dublgis.api.ACTION_BIND_DASHBOARD_INFORMATION_SERVICE` |
+| Сервис | `ru.dublgis.api.DashboardInformationService` |
+| Данные | `getDashboardInformationJSON()` |
+| Push | `registerDashboardInformationCallback(IUpdateCallback)` → `onDataUpdated()` |
+| Версия API | `getApiVersion()` (в самых ранних сборках метода нет → считаем 0) |
+
+Что приходит (группы в порядке появления в API):
+
+| Группа | Поля |
+|--------|------|
+| Навигация | `activeNavigationMode`, `maneuverIcon/Description/Distance`, `progress`, `remainingTime`, `arrivalTime`, `totalDistance` |
+| Скорость и камеры | `speedLimit` (**м/с**), `exceedingMaxSpeedLimit`, `badLocation`, `trafficCameraType/Subtype/DistancePercent` |
+| Пробки | `jamInfoDuration`, `jamInfoLengthMeters` |
+| Светофор | `trafficLightColor/Arrow/Countdown` |
+
+Правила валидности, которые учитывает [`GisDashboardInfo`](android/app/src/main/java/com/atenboro/nav/parse/GisDashboardInfo.kt):
+пустой `activeNavigationMode` = навигации нет (остальные поля невалидны); `progress` только 0…100;
+процент камеры осмыслен лишь при непустом `trafficCameraType`; `trafficLightCountdown < 0` = виджет прячем;
+`speedLimitKPH = round(speedLimit × 3.6)`.
+
+Кодовые имена иконок манёвров (`crossroad_left`, `ringroad_exit`, …) из каталога 2ГИС переводит в токены
+прошивки [`GisManeuverCodenames`](android/app/src/main/java/com/atenboro/nav/parse/GisManeuverCodenames.kt);
+неизвестный кодоным не роняет HUD, а пишется в debug-лог как `aidl new codename: …`.
+
+Проверка на устройстве:
+
+```bash
+adb shell dumpsys package ru.dublgis.dgismobile | grep -A4 ACTION_BIND_DASHBOARD
+```
 
 ## Roadmap / железо
 
