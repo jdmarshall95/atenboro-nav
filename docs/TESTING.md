@@ -43,6 +43,64 @@ cd firmware
 4. В приложении смотрите превью поворота/дистанции/камеры.
 5. Если пусто — **Dump узлов 2ГИС**, откройте файл в `Android/data/com.atenboro.nav/files/dumps/` и подправьте `NavParser`.
 
+## 3b. 2GIS Dashboard AIDL API
+
+Основной структурированный источник (1.0.9+). Требуется 2ГИС 7.16+; на текущих сборках
+доступны все поля API, включая камеры и светофор.
+
+1. Проверить, что установленный 2ГИС реально экспортирует сервис:
+
+```bash
+adb shell dumpsys package ru.dublgis.dgismobile | grep -A4 ACTION_BIND_DASHBOARD
+```
+
+2. Установить APK, **Запустить прокси** — на главном экране строка **«2GIS API: подключено (Dashboard AIDL)»**.
+3. Начать навигацию в 2ГИС; в `Debug: лог ↔ плата` должны появиться записи
+   `aidl turn=… d=… cam=… kmh=… pct=… nav=…`.
+4. Если вместо этого «нет связи» — 2ГИС не запущен, либо пакет не тот (проверяются
+   `ru.dublgis.dgismobile`, `…4preview`, `ru.dublgis.urbi`).
+5. Запись `aidl new codename: <имя>` в логе = 2ГИС расширил каталог манёвров —
+   добавьте кодоным в `GisManeuverCodenames.TABLE`.
+
+Юнит-тесты парсера (нужен `ANDROID_HOME`):
+
+```bash
+cd android && ./gradlew :app:testDebugUnitTest --tests '*GisDashboardInfoTest' --tests '*GisManeuverCodenamesTest'
+```
+
+### Прогон на реальном телефоне + виртуальной платой
+
+Проверено на Pixel 7 (2ГИС 7.29.1.632.4) с `scripts/mock_board.py` в качестве принимающей платы.
+Удобнее гонять через `adb reverse`, а не по LAN: на физическом устройстве трафик
+к `192.168.x.x` уходит в LTE и `EspNetwork.bindIfReachable()` его не ловит
+(`failed to connect … from /172.25.x.x`), а `127.0.0.1` попадает в `isMockBoard()`
+и привязка к сети вообще не нужна.
+
+```bash
+python3 scripts/mock_board.py --port 18765 &
+adb reverse tcp:18765 tcp:18765
+adb shell setprop debug.atenboro.esp_url http://127.0.0.1:18765
+adb shell am force-stop com.atenboro.nav
+adb shell am start -n com.atenboro.nav/.MainActivity
+# затем на экране «ЗАПУСТИТЬ ПРОКСИ-СЕРВИС» (am startservice не подойдёт — service exported=false)
+```
+
+Ожидание:
+- `ESP: онлайн (http://127.0.0.1:18765)` и `2GIS API: подключено (Dashboard AIDL)`;
+- в `dumpsys activity services ru.dublgis.dgismobile` появляется
+  `ru.dublgis.api.DashboardInformationService c:com.atenboro.nav`;
+- `curl http://127.0.0.1:18765/debug` отдаёт `nav_mode`, `progress`, `cam_pct` из 2ГИС
+  (в том числе `speedLimit` уже конвертированным в км/ч).
+
+Проверка `cam_pct` без реальной камеры — через inject (поля AIDL добавлены в receiver в 1.0.9):
+
+```bash
+adb shell am broadcast -a com.atenboro.nav.INJECT_NAV \
+  -n com.atenboro.nav/.service.InjectNavReceiver \
+  --es turn left --ei dist_m 150 --ez camera true --ei cam_pct 45 \
+  --es nav_mode motorcycle --ei progress 37 --es tl green --ei tl_s 7
+```
+
 ## 4. Заблокированный экран (карман)
 
 Ближе всего к реальной езде: SoftAP + FGS-прокси, экран `Asleep`/`Dozing`, апдейты без Activity.

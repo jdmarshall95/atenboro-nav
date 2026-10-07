@@ -21,6 +21,9 @@ object NavBus {
     private val _a11yConnected = MutableStateFlow(false)
     val a11yConnected: StateFlow<Boolean> = _a11yConnected.asStateFlow()
 
+    private val _gisApiConnected = MutableStateFlow(false)
+    val gisApiConnected: StateFlow<Boolean> = _gisApiConnected.asStateFlow()
+
     fun publish(update: NavUpdate) {
         _update.value = update
     }
@@ -35,5 +38,9 @@ object NavBus {
 
     fun setA11yConnected(connected: Boolean) {
         _a11yConnected.value = connected
+    }
+
+    fun setGisApiConnected(connected: Boolean) {
+        _gisApiConnected.value = connected
     }
 }

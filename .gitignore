@@ -1,6 +1,7 @@
 .venv/
 .idea/
 .vscode/
+private/
 *.iml
 
 # PlatformIO

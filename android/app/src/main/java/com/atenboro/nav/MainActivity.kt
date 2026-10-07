@@ -146,6 +146,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
+            NavBus.gisApiConnected.collect { connected ->
+                if (connected) {
+                    binding.statusGisApi.text = "2GIS API: подключено (Dashboard AIDL)"
+                    binding.dotGisApi.setBackgroundColor(Color.parseColor("#3DDC97"))
+                } else {
+                    binding.statusGisApi.text = "2GIS API: нет связи (2ГИС не запущен?)"
+                    binding.dotGisApi.setBackgroundColor(Color.parseColor("#FFB703"))
+                }
+            }
+        }
+
+        lifecycleScope.launch {
             NavBus.lastDumpPath.collect { path ->
                 if (path != null) {
                     Toast.makeText(this@MainActivity, "Dump: $path", Toast.LENGTH_LONG).show()

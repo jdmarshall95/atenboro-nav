@@ -25,6 +25,10 @@ import java.io.FileOutputStream
  * adb shell am broadcast -a com.atenboro.nav.INJECT_NAV \
  *   -n com.atenboro.nav/.service.InjectNavReceiver \
  *   --es turn left --ei dist_m 80 --ez camera true --ei cam_kmh 60
+ *
+ * Поля Dashboard AIDL API (необязательные): `--ei cam_pct 45`,
+ * `--es nav_mode motorcycle`, `--ei progress 30`, `--es tl green`,
+ * `--ei tl_s 7`, `--ei jam_min 4`.
  */
 class InjectNavReceiver : BroadcastReceiver() {
 
@@ -35,6 +39,12 @@ class InjectNavReceiver : BroadcastReceiver() {
         val camera = intent.getBooleanExtra("camera", false)
         val camM = intent.getIntExtra("cam_m", -1)
         val camKmh = intent.getIntExtra("cam_kmh", -1)
+        val camPct = intent.getIntExtra("cam_pct", -1)
+        val navMode = intent.getStringExtra("nav_mode").orEmpty()
+        val progress = intent.getIntExtra("progress", -1)
+        val tlColor = intent.getStringExtra("tl").orEmpty()
+        val tlSec = intent.getIntExtra("tl_s", -1)
+        val jamMin = intent.getIntExtra("jam_min", -1)
         val street = intent.getStringExtra("street")
         val icon = intent.getStringExtra("icon")
             ?: ManeuverIconClassifier.fallbackGlyphHex(turn)
@@ -55,6 +65,12 @@ class InjectNavReceiver : BroadcastReceiver() {
                     camera = camera,
                     camM = camM,
                     camKmh = camKmh,
+                    camPct = camPct,
+                    navMode = navMode,
+                    progress = progress,
+                    trafficLightColor = tlColor,
+                    trafficLightCountdown = tlSec,
+                    jamMin = jamMin,
                     street = street,
                     iconHex = icon,
                     navigating = true

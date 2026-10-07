@@ -15,7 +15,7 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Единая точка публикации HUD на ESP.
- * Приоритет: notif (карман) > a11y/hud скрин.
+ * Приоритет: aidl (2GIS Dashboard API) > notif (карман) > a11y/hud скрин.
  *
  * Дистанция: новое явное значение (>=0) всегда побеждает sticky —
  * иначе на подъезде <30 м / при Doze залипала старая цифра (баг поля 0.1.6).
@@ -68,6 +68,24 @@ object NavFeed {
         val now = System.currentTimeMillis()
         val fromNotif = source.startsWith("notif")
         val fromA11y = source.startsWith("a11y")
+        val fromAidl = source.startsWith("aidl")
+
+        // AIDL — структурированный источник 2ГИС: он не должен проигрывать
+        // залипшему notif, иначе camera/speedLimit из API затираются старьём.
+        if (fromAidl) {
+            val mergedAidl = mergeSticky(update)
+            NavBus.publish(mergedAidl)
+            if (now - lastLogAt > 3_000) {
+                lastLogAt = now
+                store.info(
+                    "aidl turn=${mergedAidl.turn} d=${mergedAidl.distM} cam=${mergedAidl.camera} " +
+                        "kmh=${mergedAidl.camKmh} pct=${mergedAidl.camPct} nav=${mergedAidl.navigating}"
+                )
+            }
+            if (!isUseful(mergedAidl) && !(navigating && lastSent != null)) return
+            sendToEsp(context, store, mergedAidl, "aidl")
+            return
+        }
 
         if (fromNotif && isUseful(update)) {
             lastNotifAt = now
@@ -116,6 +134,10 @@ object NavFeed {
             ts = System.currentTimeMillis() / 1000
         )
 
+        sendToEsp(context, store, toSend, source)
+    }
+
+    private fun sendToEsp(context: Context, store: DebugStore, toSend: NavUpdate, source: String) {
         scope.launch {
             mutex.withLock {
                 val t = System.currentTimeMillis()
@@ -128,6 +150,7 @@ object NavFeed {
                     prev.camera != toSend.camera ||
                     prev.camM != toSend.camM ||
                     prev.camKmh != toSend.camKmh ||
+                    prev.camPct != toSend.camPct ||
                     prev.iconHex != toSend.iconHex ||
                     prev.street != toSend.street
                 // Countdown не режем throttle — иначе на Locked OLED отстаёт
@@ -234,6 +257,7 @@ object NavFeed {
             camera = camera,
             camM = camM,
             camKmh = camKmh,
+            camPct = if (camera) update.camPct else -1,
             navigating = navigating || update.navigating
         )
     }

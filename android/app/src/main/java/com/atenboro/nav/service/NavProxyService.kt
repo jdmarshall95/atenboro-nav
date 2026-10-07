@@ -22,7 +22,14 @@ class NavProxyService : Service() {
         // Карманный режим: держим SoftAP-bind и logcat-watcher без открытого UI
         com.atenboro.nav.net.EspNetwork.bindIfReachable(this)
         GisLogcatWatcher.start(this)
+        // 2GIS Dashboard AIDL API — основной структурированный источник
+        GisDashboardClient.connect(this)
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        GisDashboardClient.disconnect()
+        super.onDestroy()
     }
 
     private fun createChannel() {
