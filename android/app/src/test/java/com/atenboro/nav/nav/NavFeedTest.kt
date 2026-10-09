@@ -1,5 +1,6 @@
 package com.atenboro.nav.nav
 
+import com.atenboro.nav.model.NavUpdate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -53,5 +54,29 @@ class NavFeedTest {
     @Test
     fun isAidlHolding_falseByDefault() {
         assertFalse(NavFeed.isAidlHolding())
+    }
+
+    @Test
+    fun clampToAidlDistance_coarseKilometresCannotIncreaseDistance() {
+        val aidl = NavUpdate(turn = "right", distM = 16_000, navigating = true)
+        val notif = NavUpdate(turn = "right", distM = 17_000)
+        assertEquals(16_000, NavFeed.clampToAidlDistance(notif, aidl, 15_000L).distM)
+    }
+
+    @Test
+    fun clampToAidlDistance_countdownAndMissingPassThrough() {
+        val aidl = NavUpdate(turn = "right", distM = 16_000, navigating = true)
+        assertEquals(15_000, NavFeed.clampToAidlDistance(NavUpdate(distM = 15_000), aidl, 15_000L).distM)
+        assertEquals(-1, NavFeed.clampToAidlDistance(NavUpdate(distM = -1), aidl, 15_000L).distM)
+        assertEquals(300, NavFeed.clampToAidlDistance(NavUpdate(distM = 300), null, 15_000L).distM)
+    }
+
+    @Test
+    fun clampToAidlDistance_staleAidlNoLongerClamps() {
+        val aidl = NavUpdate(turn = "right", distM = 16_000, navigating = true)
+        val notif = NavUpdate(turn = "right", distM = 17_000)
+        assertEquals(17_000, NavFeed.clampToAidlDistance(notif, aidl, 61_000L).distM)
+        // AIDL ещё не приходил ни разу (lastAidlAt = 0 -> age = -1)
+        assertEquals(17_000, NavFeed.clampToAidlDistance(notif, aidl, -1L).distM)
     }
 }
