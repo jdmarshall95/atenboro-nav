@@ -23,3 +23,4 @@ android/captures/
 Thumbs.db
 *.log
 .cursor/
+scripts/__pycache__/

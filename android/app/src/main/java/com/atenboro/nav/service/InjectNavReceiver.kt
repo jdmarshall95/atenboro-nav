@@ -28,7 +28,8 @@ import java.io.FileOutputStream
  *
  * Поля Dashboard AIDL API (необязательные): `--ei cam_pct 45`,
  * `--es nav_mode motorcycle`, `--ei progress 30`, `--es tl green`,
- * `--ei tl_s 7`, `--ei jam_min 4`.
+ * `--ei tl_s 7`, `--ei jam_min 4`,
+ * `--es maneuver_icon crossroad_slightly_right` (PDF-кодоимя глифа на OLED).
  */
 class InjectNavReceiver : BroadcastReceiver() {
 
@@ -46,13 +47,16 @@ class InjectNavReceiver : BroadcastReceiver() {
         val tlSec = intent.getIntExtra("tl_s", -1)
         val jamMin = intent.getIntExtra("jam_min", -1)
         val street = intent.getStringExtra("street")
+        val maneuverIcon = intent.getStringExtra("maneuver_icon").orEmpty()
         val icon = intent.getStringExtra("icon")
             ?: ManeuverIconClassifier.fallbackGlyphHex(turn)
 
         val pm = context.getSystemService(PowerManager::class.java)
         val interactive = pm?.isInteractive == true
         val store = DebugStore.get(context)
-        store.info("locked-inject begin turn=$turn d=$dist interactive=$interactive")
+        store.info(
+            "locked-inject begin turn=$turn icon=$maneuverIcon d=$dist interactive=$interactive"
+        )
 
         val pending = goAsync()
         val app = context.applicationContext
@@ -61,6 +65,7 @@ class InjectNavReceiver : BroadcastReceiver() {
                 EspNetwork.bindIfReachable(app)
                 val update = NavUpdate(
                     turn = turn,
+                    maneuverIcon = maneuverIcon,
                     distM = dist,
                     camera = camera,
                     camM = camM,
