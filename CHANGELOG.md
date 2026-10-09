@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.10] — 2026-10-09
+
+### Added
+- SoftAP **secondary** без `bindProcessToNetwork`: HTTP на плату через SocketFactory,
+  LTE/интернет процесса не гасится; в UI строки «ESP» и «Интернет: LTE/Wi‑Fi».
+- OLED: PROGMEM-глифы по PDF-кодоимени `maneuver_icon` (`firmware/src/gis_maneuvers.h`,
+  51 иконка 62×46); регенерация [`scripts/gen_gis_maneuvers.py`](scripts/gen_gis_maneuvers.py).
+- POST `/nav` поле `maneuver_icon`; inject `--es maneuver_icon …`.
+
+### Fixed
+- Пока свежий Dashboard AIDL (~10 с), notif/a11y/gislog **не** перебивают `turn` на OLED
+  (полевая ошибка «плавно направо → налево»).
+- Парсер «плавно поверните» / slight_right и каталог кодоимён согласованы с PDF 2ГИС.
+- Fallback-стрелки и GIS-глифы максимизированы под левую половину OLED (62×46).
+
+### Verified
+- Pixel 7 + SoftAP `atenboro-nav`: ESP online при живом LTE; inject `crossroad_slightly_right`
+  и камера `cam_kmh=60` на OLED; живой прогон Павелецкая→Гарибальди с HUD-камерой 60.
+
 ## [1.0.9] — 2026-10-07
 
 ### Added

@@ -4,26 +4,44 @@ import android.content.Context
 import com.atenboro.nav.model.NavUpdate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Dns
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
 class EspClient(
     var baseUrl: String = EspNetwork.espBaseUrl()
 ) {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(3, TimeUnit.SECONDS)
-        .writeTimeout(3, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
-        .build()
-
     private val json = "application/json; charset=utf-8".toMediaType()
 
     private fun refreshBaseUrl() {
         baseUrl = EspNetwork.espBaseUrl()
+    }
+
+    /**
+     * Клиент с SocketFactory SoftAP-сети — не трогает default/LTE маршрутизацию процесса.
+     */
+    private fun client(): OkHttpClient {
+        val (host, _) = EspNetwork.espHostPort()
+        return OkHttpClient.Builder()
+            .connectTimeout(3, TimeUnit.SECONDS)
+            .readTimeout(3, TimeUnit.SECONDS)
+            .writeTimeout(3, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .socketFactory(EspNetwork.socketFactory())
+            // SoftAP часто без DNS — резолвим IP сами для известного хоста
+            .dns(object : Dns {
+                override fun lookup(hostname: String): List<InetAddress> {
+                    if (hostname == host || hostname == EspNetwork.ESP_HOST) {
+                        return listOf(InetAddress.getByName(hostname))
+                    }
+                    return Dns.SYSTEM.lookup(hostname)
+                }
+            })
+            .build()
     }
 
     suspend fun health(context: Context? = null): Boolean = withContext(Dispatchers.IO) {
@@ -31,7 +49,7 @@ class EspClient(
         context?.let { EspNetwork.bindIfReachable(it) }
         try {
             val req = Request.Builder().url("$baseUrl/health").get().build()
-            client.newCall(req).execute().use { it.isSuccessful }
+            client().newCall(req).execute().use { it.isSuccessful }
         } catch (_: Exception) {
             false
         }
@@ -47,7 +65,7 @@ class EspClient(
                     .url("$baseUrl/nav")
                     .post(body)
                     .build()
-                client.newCall(req).execute().use { resp ->
+                client().newCall(req).execute().use { resp ->
                     if (resp.isSuccessful) Result.success(Unit)
                     else Result.failure(IllegalStateException("HTTP ${resp.code}"))
                 }
@@ -61,7 +79,7 @@ class EspClient(
         context?.let { EspNetwork.bindIfReachable(it) }
         try {
             val req = Request.Builder().url("$baseUrl/debug").get().build()
-            client.newCall(req).execute().use { resp ->
+            client().newCall(req).execute().use { resp ->
                 val body = resp.body?.string().orEmpty()
                 if (resp.isSuccessful) Result.success(body)
                 else Result.failure(IllegalStateException("HTTP ${resp.code}: $body"))
@@ -81,7 +99,7 @@ class EspClient(
                     .url("$baseUrl/debug")
                     .post(body)
                     .build()
-                client.newCall(req).execute().use { resp ->
+                client().newCall(req).execute().use { resp ->
                     if (resp.isSuccessful) Result.success(Unit)
                     else Result.failure(IllegalStateException("HTTP ${resp.code}"))
                 }
@@ -95,7 +113,7 @@ class EspClient(
         context?.let { EspNetwork.bindIfReachable(it) }
         try {
             val req = Request.Builder().url("$baseUrl/debug").delete().build()
-            client.newCall(req).execute().use { resp ->
+            client().newCall(req).execute().use { resp ->
                 if (resp.isSuccessful) Result.success(Unit)
                 else Result.failure(IllegalStateException("HTTP ${resp.code}"))
             }
@@ -110,7 +128,7 @@ class EspClient(
             context?.let { EspNetwork.bindIfReachable(it) }
             try {
                 val req = Request.Builder().url("$baseUrl/screen").get().build()
-                client.newCall(req).execute().use { resp ->
+                client().newCall(req).execute().use { resp ->
                     if (!resp.isSuccessful) {
                         return@use Result.failure(
                             IllegalStateException("HTTP ${resp.code}")

@@ -86,6 +86,7 @@ data class GisDashboardInfo(
         val cam = cameraPresent
         return NavUpdate(
             turn = turn,
+            maneuverIcon = GisManeuverCodenames.normalize(maneuverIcon).orEmpty(),
             distM = maneuverDistM,
             camera = cam,
             camM = -1,
@@ -101,7 +102,8 @@ data class GisDashboardInfo(
             rawSnippet = raw.take(240),
             allTexts = listOfNotNull(
                 maneuverDescription.takeIf { it.isNotBlank() },
-                maneuverDistance.takeIf { it.isNotBlank() }
+                maneuverDistance.takeIf { it.isNotBlank() },
+                maneuverIcon.takeIf { it.isNotBlank() }
             )
         )
     }

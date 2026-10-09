@@ -49,10 +49,11 @@ class MainActivity : AppCompatActivity() {
                 binding.dotEsp.setBackgroundColor(Color.parseColor("#FFB703"))
                 debugStore.info("wifi connect tapped")
                 val ok = EspNetwork.connectAndBind(this@MainActivity)
+                refreshInetStatus()
                 if (ok && esp.health(this@MainActivity)) {
                     binding.statusEsp.text = "ESP: онлайн (${EspClient.defaultBaseUrl()})"
                     binding.dotEsp.setBackgroundColor(Color.parseColor("#3DDC97"))
-                    debugStore.info("esp online")
+                    debugStore.info("esp online (SoftAP secondary, LTE untouched)")
                     DebugSync(this@MainActivity, esp, debugStore).sync()
                     Toast.makeText(this@MainActivity, "Связь с платой есть", Toast.LENGTH_SHORT).show()
                 } else {
@@ -180,12 +181,14 @@ class MainActivity : AppCompatActivity() {
         val camM = intent.getIntExtra("cam_m", -1)
         val camKmh = intent.getIntExtra("cam_kmh", -1)
         val street = intent.getStringExtra("street")
+        val maneuverIcon = intent.getStringExtra("maneuver_icon").orEmpty()
         val icon = intent.getStringExtra("icon")
             ?: com.atenboro.nav.parse.ManeuverIconClassifier.fallbackGlyphHex(turn)
         lifecycleScope.launch {
             EspNetwork.bindIfReachable(this@MainActivity)
             val update = NavUpdate(
                 turn = turn,
+                maneuverIcon = maneuverIcon,
                 distM = dist,
                 camera = camera,
                 camM = camM,
@@ -250,9 +253,19 @@ class MainActivity : AppCompatActivity() {
                         "ESP: офлайн — нажмите «Подключить к плате»"
                     binding.dotEsp.setBackgroundColor(Color.parseColor("#FF4D4D"))
                 }
+                refreshInetStatus()
                 delay(2_000)
             }
         }
+    }
+
+    private fun refreshInetStatus() {
+        val label = EspNetwork.internetLabel(this)
+        val ok = EspNetwork.hasInternet(this)
+        binding.statusInet.text = "Интернет: $label"
+        binding.dotInet.setBackgroundColor(
+            Color.parseColor(if (ok) "#3DDC97" else "#FFB703")
+        )
     }
 
     private fun requestNotifPermission() {

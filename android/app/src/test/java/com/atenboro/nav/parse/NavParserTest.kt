@@ -121,4 +121,12 @@ class NavParserTest {
         val update = NavParser.parse(listOf("Через 120 м плавно левее"))
         assertEquals("slight_left", update.turn)
     }
+
+    @Test
+    fun parsesPlavnoPoverniteNapravoAsSlightRight() {
+        // Поле: «плавно поверните направо» — не подряд «плавно прав», раньше схлопывалось в hard right
+        val update = NavParser.parse(listOf("Через 1,1 км плавно поверните направо"))
+        assertEquals("slight_right", update.turn)
+        assertEquals(1100, update.distM)
+    }
 }

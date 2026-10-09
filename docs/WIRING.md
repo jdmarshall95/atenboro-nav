@@ -49,6 +49,10 @@
 
 `turn`: `left` | `right` | `slight_left` | `slight_right` | `u_turn` | `straight` | `roundabout` | `arrive` | `none`
 
+Опционально `maneuver_icon` — сырое кодоимя иконки 2ГИС из PDF-каталога
+(напр. `crossroad_slightly_right`). OLED рисует PROGMEM-глиф по этому имени;
+если неизвестно — fallback на `turn`.
+
 Ответ: `{"ok":true}`
 
 Если более 5 с нет апдейта — на OLED «нет связи».

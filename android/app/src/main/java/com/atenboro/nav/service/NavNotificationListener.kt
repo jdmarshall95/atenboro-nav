@@ -124,7 +124,8 @@ class NavNotificationListener : NotificationListenerService() {
                     Log.d(TAG, "icon candidates: $summary -> ${bestIcon?.turn}@${bestIcon?.confidence}")
                 }
 
-                // Текст > уверенная иконка. Слабый straight без текста — none (не угадываем).
+                // Текст > уверенная иконка (в т.ч. «плавно поверните направо» → slight_right).
+                // Слабый straight без текста — none (не угадываем).
                 val turn = when {
                     parsed.turn != "none" -> parsed.turn
                     bestIcon != null && bestIcon.isConfident -> bestIcon.turn

@@ -1,6 +1,5 @@
 package com.atenboro.nav.nav
 
-import com.atenboro.nav.model.NavUpdate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -49,5 +48,10 @@ class NavFeedTest {
         assertFalse(after.camera)
         assertEquals(-1, after.camM)
         assertEquals(-1, after.camKmh)
+    }
+
+    @Test
+    fun isAidlHolding_falseByDefault() {
+        assertFalse(NavFeed.isAidlHolding())
     }
 }

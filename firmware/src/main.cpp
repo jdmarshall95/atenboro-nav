@@ -8,6 +8,7 @@
 #include <string.h>
 #include "splash_bmp.h"
 #include "arrows.h"
+#include "gis_maneuvers.h"
 #include "debug_log.h"
 #include "version.h"
 
@@ -52,6 +53,8 @@ struct NavState {
   bool has_icon = false;
   uint8_t icon[128]; // legacy 32x32 mono (не используем в новом HUD)
   char street[28];
+  /** Сырое кодоимя 2ГИС (PDF-каталог), напр. crossroad_slightly_right */
+  char maneuver_icon[48];
 };
 
 struct DrawnNav {
@@ -63,6 +66,7 @@ struct DrawnNav {
   int cam_kmh = -999;
   int cam_pct = -999;
   bool cam_blink_on = false;
+  char maneuver_icon[48];
 };
 
 NavState nav;
@@ -121,6 +125,13 @@ const uint8_t *turnBitmap(Turn t) {
     default:
       return BMP_STRAIGHT;
   }
+}
+
+/** PDF-кодоимя 2ГИС → PROGMEM глиф; иначе coarse turn. */
+const uint8_t *navArrowBitmap(const NavState &n) {
+  const uint8_t *gis = gisManeuverBitmap(n.maneuver_icon);
+  if (gis) return gis;
+  return turnBitmap(n.turn);
 }
 
 /** HUD: <1 км — метры; 1–9.9 км — «3.8»+km; ≥10 км — целые км. */
@@ -427,7 +438,7 @@ void drawBlueManeuverBand() {
   // Отступ от разделителя и краёв, чтобы стрелку не кропало
   const int ax = (BLUE_SPLIT - ARROW_W) / 2;
   const int ay = BLUE_TOP + (SCREEN_H - BLUE_TOP - ARROW_H) / 2;
-  display.drawBitmap(ax, ay, turnBitmap(nav.turn), ARROW_W, ARROW_H, SSD1306_WHITE);
+  display.drawBitmap(ax, ay, navArrowBitmap(nav), ARROW_W, ARROW_H, SSD1306_WHITE);
 
   char num[8];
   char unit[4];
@@ -454,6 +465,8 @@ int pctBucket(int pct) { return pct < 0 ? -1 : pct / 5; }
 void syncDrawnFromNav() {
   drawn.valid = true;
   drawn.turn = nav.turn;
+  strncpy(drawn.maneuver_icon, nav.maneuver_icon, sizeof(drawn.maneuver_icon) - 1);
+  drawn.maneuver_icon[sizeof(drawn.maneuver_icon) - 1] = '\0';
   drawn.dist_m = nav.dist_m;
   drawn.camera = nav.camera;
   drawn.cam_m = nav.cam_m;
@@ -480,7 +493,8 @@ void drawNavSmart(bool forceYellow) {
   const bool camChanged = drawn.camera != nav.camera || drawn.cam_m != nav.cam_m ||
       drawn.cam_kmh != nav.cam_kmh ||
       pctBucket(drawn.cam_pct) != pctBucket(nav.cam_pct);
-  const bool turnChanged = drawn.turn != nav.turn;
+  const bool turnChanged = drawn.turn != nav.turn ||
+      strcmp(drawn.maneuver_icon, nav.maneuver_icon) != 0;
   const bool blinkChanged = forceYellow && drawn.cam_blink_on != camBlinkOn;
 
   if (!distChanged && !camChanged && !turnChanged && !blinkChanged) {
@@ -645,9 +659,12 @@ void handleScreen() {
   const uint8_t *buf = display.getBuffer();
   const size_t bufLen = (size_t)SCREEN_W * ((SCREEN_H + 7) / 8); // 1024
 
-  char meta[120];
-  snprintf(meta, sizeof(meta), "turn=%s;dist=%d;cam=%d;cam_kmh=%d;cam_m=%d;ver=%s",
-           turnLabel(nav.turn), nav.dist_m, nav.camera ? 1 : 0, nav.cam_kmh, nav.cam_m,
+  char meta[160];
+  snprintf(meta, sizeof(meta),
+           "turn=%s;icon=%s;dist=%d;cam=%d;cam_kmh=%d;cam_m=%d;ver=%s",
+           turnLabel(nav.turn),
+           nav.maneuver_icon[0] ? nav.maneuver_icon : "-",
+           nav.dist_m, nav.camera ? 1 : 0, nav.cam_kmh, nav.cam_m,
            FW_VERSION);
 
   server.sendHeader("Access-Control-Allow-Origin", "*");
@@ -682,6 +699,20 @@ void handleNav() {
 
   if (doc["turn"].is<const char *>()) {
     nav.turn = parseTurn(doc["turn"]);
+  }
+  if (doc["maneuver_icon"].is<const char *>()) {
+    const char *mi = doc["maneuver_icon"];
+    size_t j = 0;
+    for (size_t i = 0; mi[i] && j + 1 < sizeof(nav.maneuver_icon); i++) {
+      unsigned char c = (unsigned char)mi[i];
+      if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+          (c >= '0' && c <= '9') || c == '_') {
+        nav.maneuver_icon[j++] = (char)c;
+      }
+    }
+    nav.maneuver_icon[j] = '\0';
+  } else {
+    nav.maneuver_icon[0] = '\0';
   }
   if (doc["dist_m"].is<int>()) {
     nav.dist_m = doc["dist_m"].as<int>();

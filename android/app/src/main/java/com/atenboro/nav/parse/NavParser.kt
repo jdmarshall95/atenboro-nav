@@ -137,16 +137,19 @@ object NavParser {
                 line.contains("прибыл") || line.contains("назначен") || line.contains("финиш") ||
                     line.contains("прибытие") || line.contains("arrive") ->
                     return "arrive"
-                // slight / keep — ДО hard left/right (иначе «левее» ловится как «лев»)
+                // slight / keep — ДО hard left/right (иначе «левее» ловится как «лев»).
+                // «плавно поверните направо» не содержит подряд «плавно прав» — отдельная проверка.
                 line.contains("чуть лев") || line.contains("плавно лев") || line.contains("slight left") ||
                     line.contains("slightly left") || line.contains("keep left") ||
                     line.contains("левее") || line.contains("держитесь левее") ||
-                    line.contains("держитесь лев") ->
+                    line.contains("держитесь лев") ||
+                    (line.contains("плавно") && (line.contains("налево") || line.contains("влево"))) ->
                     return "slight_left"
                 line.contains("чуть прав") || line.contains("плавно прав") || line.contains("slight right") ||
                     line.contains("slightly right") || line.contains("keep right") ||
                     line.contains("правее") || line.contains("держитесь правее") ||
-                    line.contains("держитесь прав") ->
+                    line.contains("держитесь прав") ||
+                    (line.contains("плавно") && (line.contains("направо") || line.contains("вправо"))) ->
                     return "slight_right"
                 line.contains("налево") || line.contains("влево") ||
                     line.contains("поверните налево") || line.contains("turn left") ->

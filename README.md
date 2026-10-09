@@ -143,7 +143,7 @@ SoftAP: `atenboro-nav` / `atenboro1` → `http://192.168.4.1`
 | Метод | Путь | Описание |
 |-------|------|----------|
 | `GET` | `/health` | версия |
-| `POST` | `/nav` | `turn`, `dist_m`, `camera`, `cam_m`, `cam_kmh` + `cam_pct`, `nav_mode`, `progress`, `tl`, `tl_s`, `jam_min` |
+| `POST` | `/nav` | `turn`, `maneuver_icon` (PDF-кодоимя 2ГИС), `dist_m`, `camera`, `cam_*`, `nav_mode`, `progress`, `tl*` |
 | `GET` | `/screen` | framebuffer + meta |
 | `*` | `/debug` | лог телефон ↔ плата |
 
@@ -175,7 +175,9 @@ curl -s -X POST http://192.168.4.1/nav \
 ## Заметки
 
 - 2ГИС на Qt почти не отдаёт a11y-текст — в фоне работают notification icon и logcat.
-- SoftAP без интернета: без «Подключить к плате» HTTP уйдёт в LTE; на телефоне держите LTE + secondary SoftAP, иначе 2ГИС «глухнет».
+- **Приоритет источников HUD:** Dashboard AIDL > notification > a11y/hud. Пока AIDL свежий (~10 с), notif/a11y/gislog **не** перебивают `turn` на OLED (полевая ошибка «плавно направо → налево»).
+- **Глифы OLED:** встроенные BMP по кодоимени `maneuverIcon` из PDF [`private/2GIS Navigation Maneuver Images (2).pdf`](private/2GIS%20Navigation%20Maneuver%20Images%20(2).pdf) (`firmware/src/gis_maneuvers.h`); coarse `turn` — fallback. Регенерация: [`scripts/gen_gis_maneuvers.py`](scripts/gen_gis_maneuvers.py).
+- SoftAP — **secondary** без `bindProcessToNetwork`: HTTP на плату идёт через SocketFactory SoftAP, **LTE/интернет процесса не гасится**. В UI: строки «ESP» и «Интернет: LTE».
 - На Android SoftAP часто отваливается, когда телефон видит знакомую сеть — это главный стимул уйти на BLE.
 - Карманный баннер `N km — улица` принимает длинные дистанции (раньше >8 км отбрасывались → на OLED всплывали «20–30 м»).
 - Для стенда без железа: [`scripts/mock_board.py`](scripts/mock_board.py) + `debug.atenboro.esp_url` (см. [`docs/TESTING.md`](docs/TESTING.md)).
@@ -246,9 +248,11 @@ curl -s -X POST http://192.168.4.1/nav \
 процент камеры осмыслен лишь при непустом `trafficCameraType`; `trafficLightCountdown < 0` = виджет прячем;
 `speedLimitKPH = round(speedLimit × 3.6)`.
 
-Кодовые имена иконок манёвров (`crossroad_left`, `ringroad_exit`, …) из каталога 2ГИС переводит в токены
-прошивки [`GisManeuverCodenames`](android/app/src/main/java/com/atenboro/nav/parse/GisManeuverCodenames.kt);
-неизвестный кодоным не роняет HUD, а пишется в debug-лог как `aidl new codename: …`.
+Кодовые имена иконок манёвров (`crossroad_slightly_right`, `ringroad_exit`, …) из PDF-каталога 2ГИС:
+APK шлёт сырое `maneuver_icon` на плату и параллельно мапит в coarse `turn` через
+[`GisManeuverCodenames`](android/app/src/main/java/com/atenboro/nav/parse/GisManeuverCodenames.kt);
+OLED рисует PROGMEM-глиф из [`gis_maneuvers.h`](firmware/src/gis_maneuvers.h) по кодоимени.
+Неизвестный кодоным не роняет HUD (fallback на `turn`) и пишется в debug-лог как `aidl new codename: …`.
 
 Проверка на устройстве:
 

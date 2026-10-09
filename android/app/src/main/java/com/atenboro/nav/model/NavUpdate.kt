@@ -4,6 +4,8 @@ import com.atenboro.nav.parse.AsciiLatin
 
 data class NavUpdate(
     val turn: String = "none",
+    /** Сырое кодоимя иконки 2ГИС (PDF-каталог), напр. crossroad_slightly_right */
+    val maneuverIcon: String = "",
     val distM: Int = -1,
     val camera: Boolean = false,
     val camM: Int = -1,
@@ -15,7 +17,7 @@ data class NavUpdate(
     val rawSnippet: String = "",
     val allDistances: List<Int> = emptyList(),
     val allTexts: List<String> = emptyList(),
-    /** 32×32 mono icon as hex (128 bytes) — точная стрелка 2ГИС */
+    /** 32×32 mono icon as hex (128 bytes) — legacy; OLED рисует PROGMEM по maneuverIcon */
     val iconHex: String? = null,
     val street: String? = null,
     val navigating: Boolean = false,
@@ -34,8 +36,12 @@ data class NavUpdate(
 ) {
     fun toJson(): String {
         val cam = if (camera) "true" else "false"
-        val sb = StringBuilder(180 + (iconHex?.length ?: 0))
+        val sb = StringBuilder(220 + (iconHex?.length ?: 0) + maneuverIcon.length)
         sb.append("""{"turn":"$turn","dist_m":$distM,"camera":$cam,"cam_m":$camM,"cam_kmh":$camKmh,"ts":$ts""")
+        if (maneuverIcon.isNotBlank()) {
+            val safe = maneuverIcon.replace("\\", "\\\\").replace("\"", "\\\"")
+            sb.append(""","maneuver_icon":"$safe"""")
+        }
         if (camPct in 0..100) sb.append(""","cam_pct":$camPct""")
         if (navMode.isNotBlank()) sb.append(""","nav_mode":"$navMode"""")
         if (progress in 0..100) sb.append(""","progress":$progress""")
@@ -79,6 +85,7 @@ data class NavUpdate(
             else -> "нет"
         }
         val extra = StringBuilder()
+        if (maneuverIcon.isNotBlank()) extra.append("Иконка 2ГИС: ").append(maneuverIcon).append("\n")
         if (navMode.isNotBlank()) extra.append("Режим: ").append(navMode).append("\n")
         if (progress in 0..100) extra.append("Прогресс маршрута: ").append(progress).append("%\n")
         if (trafficLightColor.isNotBlank()) {
@@ -95,6 +102,9 @@ data class NavUpdate(
         sb.append("=== DUMP & PARSER DEBUG ===\n")
         sb.append("Время: ").append(ts).append("\n")
         sb.append("Определён поворот: ").append(turn).append("\n")
+        if (maneuverIcon.isNotBlank()) {
+            sb.append("Кодоимя иконки 2ГИС: ").append(maneuverIcon).append("\n")
+        }
         sb.append("Дистанция маневра: ").append(if (distM >= 0) "$distM м" else "не найдена").append("\n")
         sb.append("Камера: ").append(camera)
             .append(" (dist: ").append(camM).append(" м, speed: ").append(camKmh).append(" км/ч")
