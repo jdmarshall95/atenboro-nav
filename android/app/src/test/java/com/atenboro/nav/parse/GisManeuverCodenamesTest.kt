@@ -88,4 +88,28 @@ class GisManeuverCodenamesTest {
     fun catalogIsNotEmpty() {
         assertTrue(GisManeuverCodenames.CATALOG.size > 30)
     }
+
+    @Test
+    fun pdfCatalogDriveIconsAreKnown() {
+        // Имена из private/2GIS Navigation Maneuver Images (2).pdf
+        val pdf = listOf(
+            "crossroad_keep_left", "crossroad_keep_right",
+            "crossroad_left", "crossroad_right",
+            "crossroad_sharply_left", "crossroad_sharply_right",
+            "crossroad_slightly_left", "crossroad_slightly_right",
+            "crossroad_straight", "crossroad_uturn",
+            "left_ring_exit", "right_ring_exit",
+            "ringroad_exit", "ringroad_forward", "ringroad_backward",
+            "turn_over", "turn_over_left_hand", "turn_over_right_hand",
+            "finish"
+        )
+        for (c in pdf) {
+            assertTrue("unknown $c", GisManeuverCodenames.isKnown(c))
+            assertTrue("none for $c", GisManeuverCodenames.toTurn(c) != GisManeuverCodenames.NONE)
+        }
+        assertEquals(
+            GisManeuverCodenames.SLIGHT_RIGHT,
+            GisManeuverCodenames.toTurn("crossroad_slightly_right")
+        )
+    }
 }

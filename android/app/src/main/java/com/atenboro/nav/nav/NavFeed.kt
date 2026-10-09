@@ -25,6 +25,8 @@ object NavFeed {
     private const val THROTTLE_MS = 350L
     private const val HEARTBEAT_MS = 2000L
     private const val NOTIF_HOLD_MS = 10_000L
+    /** Пока AIDL свежий — notif/a11y/gislog не перебивают turn на OLED. */
+    private const val AIDL_HOLD_MS = 10_000L
     /** Камера липнет кратко — иначе мигающий кадр без «камер» гасит HUD; дольше — не снять алерт. */
     private const val CAM_STICKY_MS = 3_500L
     /** Верхняя граница «ещё манёвр», не весь маршрут (км). */
@@ -40,6 +42,8 @@ object NavFeed {
     @Volatile private var navigating = false
     @Volatile private var lastNotifAt = 0L
     @Volatile private var lastNotif: NavUpdate? = null
+    @Volatile private var lastAidlAt = 0L
+    @Volatile private var lastAidl: NavUpdate? = null
     @Volatile private var lastCameraTrueAt = 0L
 
     fun isUseful(u: NavUpdate): Boolean {
@@ -55,11 +59,21 @@ object NavFeed {
         navigating = false
         lastNotifAt = 0L
         lastNotif = null
+        lastAidlAt = 0L
+        lastAidl = null
         lastCameraTrueAt = 0L
         DebugStore.get(context).info("$source nav ended")
     }
 
     fun isNavigating(): Boolean = navigating
+
+    /** Свежий AIDL держит монополию на turn для ESP. */
+    internal fun isAidlHolding(now: Long = System.currentTimeMillis()): Boolean {
+        if (lastAidlAt <= 0L) return false
+        if (now - lastAidlAt >= AIDL_HOLD_MS) return false
+        val held = lastAidl ?: return false
+        return held.navigating || isUseful(held)
+    }
 
     fun publish(context: Context, update: NavUpdate, source: String) {
         val store = DebugStore.get(context)
@@ -69,21 +83,37 @@ object NavFeed {
         val fromNotif = source.startsWith("notif")
         val fromA11y = source.startsWith("a11y")
         val fromAidl = source.startsWith("aidl")
+        val fromGislog = source.startsWith("gislog")
 
         // AIDL — структурированный источник 2ГИС: он не должен проигрывать
         // залипшему notif, иначе camera/speedLimit из API затираются старьём.
         if (fromAidl) {
             val mergedAidl = mergeSticky(update)
+            lastAidlAt = now
+            lastAidl = mergedAidl
             NavBus.publish(mergedAidl)
             if (now - lastLogAt > 3_000) {
                 lastLogAt = now
                 store.info(
-                    "aidl turn=${mergedAidl.turn} d=${mergedAidl.distM} cam=${mergedAidl.camera} " +
+                    "aidl icon=${mergedAidl.maneuverIcon.ifBlank { "—" }} " +
+                        "turn=${mergedAidl.turn} d=${mergedAidl.distM} cam=${mergedAidl.camera} " +
                         "kmh=${mergedAidl.camKmh} pct=${mergedAidl.camPct} nav=${mergedAidl.navigating}"
                 )
             }
             if (!isUseful(mergedAidl) && !(navigating && lastSent != null)) return
             sendToEsp(context, store, mergedAidl, "aidl")
+            return
+        }
+
+        // notif / a11y / gislog не затирают свежий AIDL-turn на OLED
+        if ((fromNotif || fromA11y || fromGislog) && isAidlHolding(now)) {
+            val held = lastAidl
+            if (now - lastLogAt > 4_000) {
+                lastLogAt = now
+                store.info(
+                    "$source deferred (aidl hold) keep=${held?.maneuverIcon}/${held?.turn}/${held?.distM}"
+                )
+            }
             return
         }
 
@@ -120,8 +150,9 @@ object NavFeed {
             lastLogAt = now
             val sample = merged.allTexts.take(4).joinToString(" | ").take(100)
             store.info(
-                "$source turn=${merged.turn} d=${merged.distM} icon=${!merged.iconHex.isNullOrEmpty()} " +
-                    "nav=${merged.navigating} texts=$sample"
+                "$source turn=${merged.turn} d=${merged.distM} " +
+                    "maneuver_icon=${merged.maneuverIcon.ifBlank { "—" }} " +
+                    "icon=${!merged.iconHex.isNullOrEmpty()} nav=${merged.navigating} texts=$sample"
             )
         }
 
@@ -146,6 +177,7 @@ object NavFeed {
                     prev != null && toSend.distM >= 0 && prev.distM >= 0 && toSend.distM < prev.distM
                 val changed = prev == null ||
                     prev.turn != toSend.turn ||
+                    prev.maneuverIcon != toSend.maneuverIcon ||
                     prev.distM != toSend.distM ||
                     prev.camera != toSend.camera ||
                     prev.camM != toSend.camM ||
@@ -170,7 +202,10 @@ object NavFeed {
                         )
                     )
                 } else {
-                    if (changed) store.info("$source sent ${toSend.turn} ${toSend.distM}m")
+                    if (changed) {
+                        val icon = toSend.maneuverIcon.ifBlank { toSend.turn }
+                        store.info("$source sent $icon ${toSend.distM}m")
+                    }
                     NavBus.publish(toSend.copy(httpStatus = "OK", lastError = null))
                 }
             }
@@ -210,6 +245,7 @@ object NavFeed {
         if (!navigating && !update.navigating) return update
 
         var turn = update.turn
+        var maneuverIcon = update.maneuverIcon
         var icon = update.iconHex
         var dist = update.distM
         var street = update.street
@@ -220,6 +256,9 @@ object NavFeed {
         if (turn == "none" && prev.turn != "none") {
             val pocketOnly = update.distM in 0..DIST_USEFUL_MAX && !update.street.isNullOrBlank()
             if (!pocketOnly) turn = prev.turn
+        }
+        if (maneuverIcon.isBlank() && prev.maneuverIcon.isNotBlank()) {
+            maneuverIcon = prev.maneuverIcon
         }
         if (update.iconHex == "") {
             icon = null
@@ -251,6 +290,7 @@ object NavFeed {
 
         return update.copy(
             turn = turn,
+            maneuverIcon = maneuverIcon,
             iconHex = icon,
             distM = dist,
             street = street,

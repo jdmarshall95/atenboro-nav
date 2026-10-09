@@ -52,11 +52,31 @@ class GisDashboardInfoTest {
 
         val u = info.toNavUpdate()
         assertEquals("right", u.turn)
+        assertEquals("crossroad_right", u.maneuverIcon)
         assertEquals(500, u.distM)
         assertTrue(u.navigating)
         assertEquals("motorcycle", u.navMode)
         assertEquals(42, u.progress)
         assertEquals("улица Рубежная", u.street)
+    }
+
+    @Test
+    fun slightRightCodenameMapsAndPassesThrough() {
+        val info = GisDashboardInfo.parse(
+            """
+              {
+                "activeNavigationMode":"motorcycle",
+                "maneuverIcon":"crossroad_slightly_right",
+                "maneuverDistance":"1,1 км"
+              }
+            """.trimIndent()
+        )
+        assertEquals(GisManeuverCodenames.SLIGHT_RIGHT, info.turn)
+        val u = info.toNavUpdate()
+        assertEquals("slight_right", u.turn)
+        assertEquals("crossroad_slightly_right", u.maneuverIcon)
+        assertEquals(1100, u.distM)
+        assertTrue(u.toJson().contains(""""maneuver_icon":"crossroad_slightly_right""""))
     }
 
     @Test
