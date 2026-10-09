@@ -25,8 +25,18 @@ object NavFeed {
     private const val THROTTLE_MS = 350L
     private const val HEARTBEAT_MS = 2000L
     private const val NOTIF_HOLD_MS = 10_000L
-    /** Пока AIDL свежий — notif/a11y/gislog не перебивают turn на OLED. */
-    private const val AIDL_HOLD_MS = 10_000L
+    /**
+     * Пока AIDL свежий — notif/a11y/gislog не перебивают turn на OLED.
+     * 10 с не выдерживали пауз 2ГИС: по логу двухчасовой поездки p90 паузы 6,7 с,
+     * 158 пауз длиннее 10 с — держалка обрывалась посреди маршрута и впускала
+     * устаревшее уведомление.
+     */
+    private const val AIDL_HOLD_MS = 30_000L
+    /**
+     * Ещё дольше coarse-источник не может увеличить дистанцию относительно
+     * последнего точного AIDL-значения (см. [clampToAidlDistance]).
+     */
+    private const val AIDL_DIST_MAX_AGE_MS = 60_000L
     /** Камера липнет кратко — иначе мигающий кадр без «камер» гасит HUD; дольше — не снять алерт. */
     private const val CAM_STICKY_MS = 3_500L
     /** Верхняя граница «ещё манёвр», не весь маршрут (км). */
@@ -39,6 +49,7 @@ object NavFeed {
     @Volatile private var lastSent: NavUpdate? = null
     @Volatile private var lastSendAt = 0L
     @Volatile private var lastLogAt = 0L
+    @Volatile private var lastClampLogAt = 0L
     @Volatile private var navigating = false
     @Volatile private var lastNotifAt = 0L
     @Volatile private var lastNotif: NavUpdate? = null
@@ -73,6 +84,26 @@ object NavFeed {
         if (now - lastAidlAt >= AIDL_HOLD_MS) return false
         val held = lastAidl ?: return false
         return held.navigating || isUseful(held)
+    }
+
+    /**
+     * notif/a11y/gislog отдают дистанцию грубо: выше 1 км уведомление показывает
+     * целые километры («17 km» → 17000 м), тогда как AIDL в тот же момент отдаёт
+     * честные 16000 м. Когда держалка истекла и coarse-кадр всё-таки прошёл,
+     * такое округление выглядит как прыжок дистанции назад.
+     *
+     * Пока последний AIDL не старше [AIDL_DIST_MAX_AGE_MS], дистанцию берём из него;
+     * уменьшение (countdown) coarse-источника пропускаем как есть.
+     */
+    internal fun clampToAidlDistance(
+        update: NavUpdate,
+        lastAidl: NavUpdate?,
+        aidlAgeMs: Long
+    ): NavUpdate {
+        if (aidlAgeMs < 0L || aidlAgeMs >= AIDL_DIST_MAX_AGE_MS) return update
+        val held = lastAidl ?: return update
+        if (held.distM < 0 || update.distM <= held.distM) return update
+        return update.copy(distM = held.distM)
     }
 
     fun publish(context: Context, update: NavUpdate, source: String) {
@@ -117,9 +148,25 @@ object NavFeed {
             return
         }
 
-        if (fromNotif && isUseful(update)) {
+        // Держалка истекла — coarse-кадр проходит, но дистанцию из него всё равно
+        // надо причесать под последнее точное значение AIDL (см. clampToAidlDistance).
+        val base =
+            if (fromNotif || fromA11y || fromGislog) {
+                clampToAidlDistance(update, lastAidl, now - lastAidlAt)
+            } else {
+                update
+            }
+        if (base.distM != update.distM && now - lastClampLogAt > 4_000) {
+            lastClampLogAt = now
+            store.info(
+                "$source dist clamped to aidl ${update.distM}->${base.distM} " +
+                    "(aidl age ${now - lastAidlAt}ms)"
+            )
+        }
+
+        if (fromNotif && isUseful(base)) {
             lastNotifAt = now
-            lastNotif = update
+            lastNotif = base
         }
 
         // a11y/hud не перебивают свежий карманный notif — кроме countdown дистанции / усиления
@@ -127,12 +174,12 @@ object NavFeed {
             val held = lastNotif
             if (held != null && isUseful(held)) {
                 val improved =
-                    (update.turn != "none" && update.turn != "straight" && held.turn == "straight") ||
-                        (update.camera && !held.camera) ||
-                        (update.distM in 0..DIST_USEFUL_MAX && held.distM < 0) ||
+                    (base.turn != "none" && base.turn != "straight" && held.turn == "straight") ||
+                        (base.camera && !held.camera) ||
+                        (base.distM in 0..DIST_USEFUL_MAX && held.distM < 0) ||
                         // countdown: меньшая дистанция с a11y важнее залипшего notif
-                        (update.distM in 0..DIST_USEFUL_MAX && held.distM >= 0 &&
-                            update.distM < held.distM)
+                        (base.distM in 0..DIST_USEFUL_MAX && held.distM >= 0 &&
+                            base.distM < held.distM)
                 if (!improved) {
                     if (now - lastLogAt > 4_000) {
                         lastLogAt = now
@@ -143,7 +190,7 @@ object NavFeed {
             }
         }
 
-        val merged = mergeSticky(preferNotifFields(update, fromA11y))
+        val merged = mergeSticky(preferNotifFields(base, fromA11y))
         NavBus.publish(merged)
 
         if (now - lastLogAt > 3_000) {
