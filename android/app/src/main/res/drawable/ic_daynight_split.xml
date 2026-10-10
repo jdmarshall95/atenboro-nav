@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Переключатель день/ночь в духе sun/moon: круг, сколотый по диагонали —
+  нижняя левая половина солнце с лучами, верхняя правая половина луна.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Солнечная половина (золото) -->
+    <path
+        android:fillColor="@color/gold"
+        android:pathData="M7.05,7.05 A7,7 0 0,0 16.95,16.95 Z" />
+
+    <!-- Лунная половина (сталь) -->
+    <path
+        android:fillColor="@color/steel_deep"
+        android:pathData="M7.05,7.05 A7,7 0 0,1 16.95,16.95 Z" />
+
+    <!-- Полумесяц на лунной половине -->
+    <path
+        android:fillColor="@color/gold_bright"
+        android:pathData="M15.9,7.6 A3.3,3.3 0 1,1 11.6,11.9 A2.5,2.5 0 1,0 15.9,7.6 Z" />
+
+    <!-- Лучи солнца -->
+    <path
+        android:pathData="M12,20.2 L12,22.2"
+        android:strokeColor="@color/gold"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M8.86,19.58 L8.1,21.42"
+        android:strokeColor="@color/gold"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M6.2,17.8 L4.79,19.21"
+        android:strokeColor="@color/gold"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M4.42,15.14 L2.58,15.9"
+        android:strokeColor="@color/gold"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M3.8,12 L1.8,12"
+        android:strokeColor="@color/gold"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+</vector>

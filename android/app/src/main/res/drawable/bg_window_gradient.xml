@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Фон приложения: базовый вертикальный градиент + тёплый золотой диагональный блик -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="@color/grad_window_center"
+                android:endColor="@color/grad_window_end"
+                android:startColor="@color/grad_window_start"
+                android:type="linear" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:centerColor="#08000000"
+                android:endColor="#14D8B24A"
+                android:startColor="#00000000"
+                android:type="linear" />
+        </shape>
+    </item>
+</layer-list>

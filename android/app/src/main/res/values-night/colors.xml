@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ночная палитра M3: чёрный корпус, серые поверхности, золотой металлик.
+  Золото и его производные совпадают с днём, чтобы бренд не «прыгал».
+-->
+<resources>
+    <color name="gold_container">#241D0E</color>
+    <color name="gold_outline">#6E571C</color>
+
+    <color name="steel">#A9B1BD</color>
+    <color name="steel_deep">#5E6672</color>
+
+    <color name="bg">#08080B</color>
+    <color name="bg_elevated">#101015</color>
+    <color name="surface">#15151A</color>
+    <!-- Полупрозрачная поверхность: сквозь неё видно золотую ауру фона -->
+    <color name="surface_glass">#CC15151A</color>
+    <color name="surface_variant">#1E1E25</color>
+    <color name="stroke">#2C2C35</color>
+    <color name="text">#F2F2F5</color>
+    <color name="muted">#9C9CA8</color>
+
+    <color name="ok">@color/gold</color>
+    <color name="pending">#8A8A95</color>
+    <color name="error">#CF6679</color>
+
+    <color name="warn">@color/gold_bright</color>
+
+    <color name="grad_window_start">#111014</color>
+    <color name="grad_window_center">#0B0B0E</color>
+    <color name="grad_window_end">#08080B</color>
+    <color name="grad_hero_start">#2A2113</color>
+    <color name="grad_hero_center">#191920</color>
+    <color name="grad_hero_end">#121218</color>
+    <color name="grad_tile_start">#241F14</color>
+    <color name="grad_tile_center">#191920</color>
+    <color name="grad_tile_end">#15151B</color>
+    <color name="grad_btn_start">#F6E7B0</color>
+    <color name="grad_btn_center">#D8B24A</color>
+    <color name="grad_btn_end">#A8832C</color>
+    <color name="grad_oled_start">#0E0E12</color>
+    <color name="grad_oled_end">#06060A</color>
+    <color name="dot_core">#F6E7B0</color>
+    <color name="dot_mid">#D8B24A</color>
+    <color name="dot_edge">#A8832C</color>
+
+    <!-- Свечение «аура» в стиле skipper-ui: золотая дымка над чёрным корпусом -->
+    <color name="glow_gold">#2ED8B24A</color>
+    <color name="glow_gold_strong">#14D8B24A</color>
+</resources>

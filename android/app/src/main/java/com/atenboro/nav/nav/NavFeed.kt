@@ -6,6 +6,7 @@ import com.atenboro.nav.NavBus
 import com.atenboro.nav.debug.DebugStore
 import com.atenboro.nav.model.NavUpdate
 import com.atenboro.nav.net.EspClient
+import com.atenboro.nav.settings.AppPrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -106,7 +107,21 @@ object NavFeed {
         return update.copy(distM = held.distM)
     }
 
+    /**
+     * Включён ли источник пользователем. AIDL — основной: он не отключается.
+     * Остальные по умолчанию выключены и участвуют в арбитраже только после
+     * включения в настройках продукта.
+     */
+    internal fun isSourceEnabled(source: String): Boolean = when {
+        source.startsWith("aidl") -> true
+        source.startsWith("notif") -> AppPrefs.notifEnabled
+        source.startsWith("a11y") -> AppPrefs.a11yEnabled
+        source.startsWith("gislog") -> AppPrefs.logcatEnabled
+        else -> true
+    }
+
     fun publish(context: Context, update: NavUpdate, source: String) {
+        if (!isSourceEnabled(source)) return
         val store = DebugStore.get(context)
         if (update.navigating) navigating = true
 

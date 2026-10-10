@@ -1,13 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Палитра Material Design 3: чёрный/серый корпус + золотой металлик.
+  Дневной вариант здесь, ночной — в values-night/colors.xml.
+  Имена bg/surface/accent/… сохранены: на них опираются activity_debug.xml
+  и adaptive-icon.
+-->
 <resources>
-    <color name="bg">#080E18</color>
-    <color name="surface">#131F33</color>
-    <color name="surface_variant">#1C2D48</color>
-    <color name="accent">#3DDC97</color>
-    <color name="cyan">#00E5FF</color>
-    <color name="warn">#FFB703</color>
-    <color name="error">#FF4D4D</color>
-    <color name="text">#F0F4F8</color>
-    <color name="muted">#94A3B8</color>
-    <color name="stroke">#233550</color>
+    <!-- Брендовое золото (одинаковое в обеих темах) -->
+    <color name="gold">#D8B24A</color>
+    <color name="gold_bright">#F6E7B0</color>
+    <color name="gold_deep">#9C7B25</color>
+    <color name="gold_ink">#14100A</color>
+    <color name="gold_container">#F3E7C4</color>
+    <color name="gold_outline">#B08F35</color>
+
+    <!-- Сталь (вторичный акцент) -->
+    <color name="steel">#5E6672</color>
+    <color name="steel_deep">#3A404A</color>
+
+    <!-- Поверхности (день) -->
+    <color name="bg">#FBFAF7</color>
+    <color name="bg_elevated">#FFFFFF</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_variant">#EFEEE9</color>
+    <color name="stroke">#DAD8D1</color>
+    <!-- Полупрозрачная поверхность: сквозь неё видно золотую ауру фона -->
+    <color name="surface_glass">#CCFFFFFF</color>
+    <color name="text">#1A1A1E</color>
+    <color name="muted">#6B6B75</color>
+
+    <!-- Состояния -->
+    <color name="ok">@color/gold_deep</color>
+    <color name="pending">#9A9AA5</color>
+    <color name="error">#B3261E</color>
+
+    <!-- Совместимость со старыми разметками -->
+    <color name="accent">@color/gold</color>
+    <color name="cyan">@color/steel</color>
+    <color name="warn">@color/gold_deep</color>
+
+    <!-- Градиенты (день) -->
+    <color name="grad_window_start">#FFFFFF</color>
+    <color name="grad_window_center">#F7F5F0</color>
+    <color name="grad_window_end">#EFEEE9</color>
+    <color name="grad_hero_start">#F6E7B0</color>
+    <color name="grad_hero_center">#FDFBF5</color>
+    <color name="grad_hero_end">#F2F0EA</color>
+    <color name="grad_tile_start">#F6EED8</color>
+    <color name="grad_tile_center">#FCFBF8</color>
+    <color name="grad_tile_end">#F4F3EF</color>
+    <color name="grad_btn_start">#F6E7B0</color>
+    <color name="grad_btn_center">#D8B24A</color>
+    <color name="grad_btn_end">#A8832C</color>
+    <color name="grad_oled_start">#F2F0EA</color>
+    <color name="grad_oled_end">#E6E4DD</color>
+    <color name="dot_core">#F6E7B0</color>
+    <color name="dot_mid">#D8B24A</color>
+    <color name="dot_edge">#A8832C</color>
+
+    <!-- Свечение «аура» как у skipper-ui: днём почти незаметно, ночью ярче -->
+    <color name="glow_gold">#0FD8B24A</color>
+    <color name="glow_gold_strong">#00000000</color>
 </resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Фон экрана: базовый градиент корпуса + золотая аура поверх -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/bg_window_gradient" />
+    <item android:drawable="@drawable/bg_glow_gold" />
+</layer-list>

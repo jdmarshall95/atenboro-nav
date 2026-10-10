@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Индикатор состояния: золотое ядро с мягким свечением (radial) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:type="radial"
+        android:gradientRadius="50%p"
+        android:startColor="@color/gold_bright"
+        android:centerColor="@color/gold"
+        android:endColor="@color/gold_deep" />
+</shape>

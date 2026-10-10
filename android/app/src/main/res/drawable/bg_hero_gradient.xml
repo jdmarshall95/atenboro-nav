@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Шапка: тёмная поверхность с диагональным золотым бликом -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="315"
+        android:centerColor="@color/grad_hero_center"
+        android:endColor="@color/grad_hero_end"
+        android:startColor="@color/grad_hero_start"
+        android:type="linear" />
+    <corners android:radius="24dp" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/gold_outline" />
+</shape>

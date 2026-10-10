@@ -3,27 +3,33 @@ package com.atenboro.nav
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
+import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.atenboro.nav.databinding.ActivityMainBinding
-import com.atenboro.nav.model.NavUpdate
 import com.atenboro.nav.debug.DebugStore
 import com.atenboro.nav.debug.DebugSync
+import com.atenboro.nav.model.NavUpdate
 import com.atenboro.nav.net.EspClient
 import com.atenboro.nav.net.EspNetwork
+import com.atenboro.nav.service.GisLogcatWatcher
 import com.atenboro.nav.service.NavProxyService
+import com.atenboro.nav.settings.AppPrefs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+/**
+ * Основной экран: один экран без прокрутки.
+ * День/ночь, шестерёнка настроек, статусы подключений и запуск прокси.
+ */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -31,139 +37,75 @@ class MainActivity : AppCompatActivity() {
     private lateinit var debugStore: DebugStore
     private var healthJob: Job? = null
 
+    private enum class Level { OK, PENDING, ERROR }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        AppPrefs.load(this)
+        AppPrefs.applyTheme()
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         debugStore = DebugStore.get(this)
         debugStore.info("MainActivity start")
-        com.atenboro.nav.service.GisLogcatWatcher.start(this)
 
         requestNotifPermission()
         requestWifiPermissions()
         handleInjectIntent(intent)
 
+        binding.btnTheme.setOnClickListener {
+            AppPrefs.cycleTheme(this)
+            Toast.makeText(this, "Оформление: ${AppPrefs.themeLabel()}", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
         binding.btnConnectEsp.setOnClickListener {
             lifecycleScope.launch {
-                binding.statusEsp.text = "ESP: подключение к ${EspNetwork.AP_SSID}…"
-                binding.dotEsp.setBackgroundColor(Color.parseColor("#FFB703"))
+                render(binding.dotEsp, binding.statusEsp, getString(R.string.state_checking), Level.PENDING)
                 debugStore.info("wifi connect tapped")
                 val ok = EspNetwork.connectAndBind(this@MainActivity)
                 refreshInetStatus()
                 if (ok && esp.health(this@MainActivity)) {
-                    binding.statusEsp.text = "ESP: онлайн (${EspClient.defaultBaseUrl()})"
-                    binding.dotEsp.setBackgroundColor(Color.parseColor("#3DDC97"))
+                    render(
+                        binding.dotEsp, binding.statusEsp,
+                        getString(R.string.state_online) + " (${EspClient.defaultBaseUrl()})",
+                        Level.OK
+                    )
                     debugStore.info("esp online (SoftAP secondary, LTE untouched)")
                     DebugSync(this@MainActivity, esp, debugStore).sync()
                     Toast.makeText(this@MainActivity, "Связь с платой есть", Toast.LENGTH_SHORT).show()
                 } else {
-                    binding.statusEsp.text =
-                        "ESP: офлайн — выберите ${EspNetwork.AP_SSID} / ${EspNetwork.AP_PASS}"
-                    binding.dotEsp.setBackgroundColor(Color.parseColor("#FF4D4D"))
+                    render(
+                        binding.dotEsp, binding.statusEsp,
+                        getString(R.string.state_offline) + " — ${EspNetwork.AP_SSID}",
+                        Level.ERROR
+                    )
                     debugStore.warn("esp offline after connect")
                     Toast.makeText(
                         this@MainActivity,
-                        "Нет связи. В системных настройках Wi‑Fi подключитесь к ${EspNetwork.AP_SSID}, пароль ${EspNetwork.AP_PASS}, затем снова нажмите кнопку.",
+                        "Нет связи. В настройках Wi‑Fi подключитесь к ${EspNetwork.AP_SSID}, " +
+                            "пароль ${EspNetwork.AP_PASS}, затем снова нажмите кнопку.",
                         Toast.LENGTH_LONG
                     ).show()
                 }
             }
         }
 
-        binding.btnOpenA11y.setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
-
-        binding.btnOpenNotif.setOnClickListener {
-            startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-        }
-
-        binding.btnTestOled.setOnClickListener {
-            lifecycleScope.launch {
-                EspNetwork.bindIfReachable(this@MainActivity)
-                val sample = NavUpdate(
-                    turn = "left",
-                    distM = 250,
-                    camera = true,
-                    camM = 120
-                )
-                val result = esp.sendNav(sample, this@MainActivity)
-                if (result.isSuccess) {
-                    debugStore.info("test oled ok")
-                    NavBus.publish(sample)
-                } else {
-                    debugStore.error("test oled fail: ${result.exceptionOrNull()?.message}")
-                }
-                Toast.makeText(
-                    this@MainActivity,
-                    if (result.isSuccess) "OLED: тест отправлен" else "Ошибка: ${result.exceptionOrNull()?.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-
-        binding.btnDump.setOnClickListener {
-            NavBus.requestDump()
-            debugStore.info("a11y dump requested")
-            Toast.makeText(this, "Запрос dump…", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.btnCopyDebug.setOnClickListener {
-            val text = binding.txtDebugInfo.text?.toString().orEmpty()
-            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("atenboro-debug", text))
-            debugStore.info("debug text copied")
-            Toast.makeText(this, "Скопировано", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.btnDebug.setOnClickListener {
-            startActivity(Intent(this, DebugActivity::class.java))
-        }
-
         binding.btnStartProxy.setOnClickListener {
-            val intent = Intent(this, NavProxyService::class.java)
-            ContextCompat.startForegroundService(this, intent)
+            ContextCompat.startForegroundService(this, Intent(this, NavProxyService::class.java))
+            if (AppPrefs.logcatEnabled) GisLogcatWatcher.start(this)
             debugStore.info("proxy service started")
             Toast.makeText(this, "Прокси запущен", Toast.LENGTH_SHORT).show()
         }
 
         lifecycleScope.launch {
-            NavBus.update.collect { update ->
-                binding.preview.text = update.previewText()
-                binding.txtDebugInfo.text = update.debugDetailsText()
-            }
+            NavBus.a11yConnected.collect { refreshAidlStatus() }
         }
 
         lifecycleScope.launch {
-            NavBus.a11yConnected.collect { connected ->
-                if (connected) {
-                    binding.statusA11y.text = "Accessibility: активен"
-                    binding.dotA11y.setBackgroundColor(Color.parseColor("#3DDC97"))
-                } else {
-                    binding.statusA11y.text = "Accessibility: выкл (требуется настройка)"
-                    binding.dotA11y.setBackgroundColor(Color.parseColor("#FFB703"))
-                }
-            }
-        }
-
-        lifecycleScope.launch {
-            NavBus.gisApiConnected.collect { connected ->
-                if (connected) {
-                    binding.statusGisApi.text = "2GIS API: подключено (Dashboard AIDL)"
-                    binding.dotGisApi.setBackgroundColor(Color.parseColor("#3DDC97"))
-                } else {
-                    binding.statusGisApi.text = "2GIS API: нет связи (2ГИС не запущен?)"
-                    binding.dotGisApi.setBackgroundColor(Color.parseColor("#FFB703"))
-                }
-            }
-        }
-
-        lifecycleScope.launch {
-            NavBus.lastDumpPath.collect { path ->
-                if (path != null) {
-                    Toast.makeText(this@MainActivity, "Dump: $path", Toast.LENGTH_LONG).show()
-                }
-            }
+            NavBus.gisApiConnected.collect { refreshAidlStatus() }
         }
     }
 
@@ -208,8 +150,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshA11yLabel()
         EspNetwork.bindIfReachable(this)
+        refreshStatuses()
         startHealthLoop()
     }
 
@@ -218,26 +160,37 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
     }
 
-    private fun refreshA11yLabel() {
-        val enabled = isAccessibilityEnabled()
-        if (!NavBus.a11yConnected.value) {
-            if (enabled) {
-                binding.statusA11y.text = "Accessibility: разрешена (ожидание)"
-                binding.dotA11y.setBackgroundColor(Color.parseColor("#3DDC97"))
-            } else {
-                binding.statusA11y.text = "Accessibility: выкл (откройте настройки)"
-                binding.dotA11y.setBackgroundColor(Color.parseColor("#FF4D4D"))
-            }
+    /** Единая точка обновления статусов — вызывается по событиям NavBus и из health-цикла. */
+    private fun refreshStatuses() {
+        refreshAidlStatus()
+        refreshInetStatus()
+    }
+
+    private fun refreshAidlStatus() {
+        if (NavBus.gisApiConnected.value) {
+            render(binding.dotGisApi, binding.statusGisApi, getString(R.string.state_connected), Level.OK)
+        } else {
+            render(binding.dotGisApi, binding.statusGisApi, getString(R.string.state_no_link), Level.PENDING)
         }
     }
 
-    private fun isAccessibilityEnabled(): Boolean {
-        val expected = "$packageName/${packageName}.service.NavAccessibilityService"
-        val setting = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ).orEmpty()
-        return setting.split(':').any { it.equals(expected, ignoreCase = true) }
+    private fun refreshInetStatus() {
+        val label = EspNetwork.internetLabel(this)
+        val ok = EspNetwork.hasInternet(this)
+        render(
+            binding.dotInet, binding.statusInet, label,
+            if (ok) Level.OK else Level.PENDING
+        )
+    }
+
+    private fun render(dot: View, label: TextView, text: String, level: Level) {
+        label.text = text
+        val res = when (level) {
+            Level.OK -> R.drawable.dot_status_gold
+            Level.PENDING -> R.drawable.dot_status_gray
+            Level.ERROR -> R.drawable.dot_status_red
+        }
+        dot.setBackgroundResource(res)
     }
 
     private fun startHealthLoop() {
@@ -246,26 +199,22 @@ class MainActivity : AppCompatActivity() {
             while (isActive) {
                 val ok = esp.health(this@MainActivity)
                 if (ok) {
-                    binding.statusEsp.text = "ESP: онлайн (${EspClient.defaultBaseUrl()})"
-                    binding.dotEsp.setBackgroundColor(Color.parseColor("#3DDC97"))
+                    render(
+                        binding.dotEsp, binding.statusEsp,
+                        getString(R.string.state_online) + " (${EspClient.defaultBaseUrl()})",
+                        Level.OK
+                    )
                 } else {
-                    binding.statusEsp.text =
-                        "ESP: офлайн — нажмите «Подключить к плате»"
-                    binding.dotEsp.setBackgroundColor(Color.parseColor("#FF4D4D"))
+                    render(
+                        binding.dotEsp, binding.statusEsp,
+                        getString(R.string.state_offline),
+                        Level.ERROR
+                    )
                 }
                 refreshInetStatus()
                 delay(2_000)
             }
         }
-    }
-
-    private fun refreshInetStatus() {
-        val label = EspNetwork.internetLabel(this)
-        val ok = EspNetwork.hasInternet(this)
-        binding.statusInet.text = "Интернет: $label"
-        binding.dotInet.setBackgroundColor(
-            Color.parseColor(if (ok) "#3DDC97" else "#FFB703")
-        )
     }
 
     private fun requestNotifPermission() {

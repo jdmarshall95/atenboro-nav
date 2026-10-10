@@ -1,5 +1,5 @@
 #pragma once
 
 // Keep in sync with repo root VERSION and Android versionName.
-#define FW_VERSION "1.0.11"
-#define FW_VERSION_CODE 111
+#define FW_VERSION "1.1"
+#define FW_VERSION_CODE 112

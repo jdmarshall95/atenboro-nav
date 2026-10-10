@@ -8,19 +8,48 @@
 
     <string name="desc_aircraft">Atenboro Aircraft</string>
     <string name="desc_logo">atenboro logo</string>
+    <string name="desc_theme">Переключить день/ночь</string>
+    <string name="desc_settings">Настройки</string>
+    <string name="desc_back">Назад</string>
     <string name="header_subtitle">HUD Navigation Proxy  •  2ГИС ➔ ESP8266 OLED</string>
-    <string name="section_status">СТАТУС И ПОДКЛЮЧЕНИЕ</string>
-    <string name="section_oled_preview">ПРОСМОТР ЭКРАНА OLED</string>
-    <string name="tag_oled_hud">128x64 HUD</string>
-    <string name="btn_enable_a11y">Включить Accessibility</string>
-    <string name="btn_enable_notif">Доступ к уведомлениям 2ГИС (карман)</string>
-    <string name="btn_start_proxy">Запустить прокси-сервис</string>
-    <string name="btn_test_oled">Тест OLED</string>
-    <string name="btn_dump">Dump 2ГИС</string>
+
+    <!-- Основной экран: только статусы -->
+    <string name="section_status">СТАТУС</string>
+    <string name="row_esp">Плата ESP8266</string>
+    <string name="row_inet">Интернет</string>
+    <string name="row_aidl">2ГИС AIDL</string>
+    <string name="row_notif">Уведомления</string>
+    <string name="row_a11y">Accessibility</string>
+
+    <string name="state_checking">проверка…</string>
+    <string name="state_primary">основной</string>
+    <string name="state_online">онлайн</string>
+    <string name="state_offline">офлайн</string>
+    <string name="state_connected">подключено</string>
+    <string name="state_no_link">нет связи</string>
+    <string name="state_active">активен</string>
+    <string name="state_waiting">ожидание</string>
+    <string name="state_off">выкл</string>
+    <string name="state_not_allowed">не разрешено</string>
+    <string name="state_standby">ожидает</string>
+    <string name="state_off_source">отключён</string>
+
+    <!-- Действия -->
+    <string name="btn_start_proxy">Запустить прокси</string>
     <string name="btn_connect_esp">Подключить к плате</string>
-    <string name="section_debug">ОТЛАДОЧНАЯ ИНФОРМАЦИЯ (2ГИС PARSER DEBUG)</string>
-    <string name="txt_debug_placeholder">Ожидание данных от 2ГИС…</string>
-    <string name="btn_copy">Копировать</string>
-    <string name="section_quick_start">БЫСТРЫЙ СТАРТ</string>
-    <string name="quick_start_hint">1) Подключить к плате\n2) Accessibility + доступ к уведомлениям (для кармана)\n3) Запустить прокси\n4) Навигация в 2ГИС — экран можно блокировать\n\nOLED обновляется только при полезных манёврах (не на «17 км маршрута»).</string>
+
+    <string name="footer_hint">Включите маршрут в 2ГИС — прокси работает в фоне</string>
+
+    <!-- Экран настроек -->
+    <string name="title_settings">НАСТРОЙКИ</string>
+    <string name="section_sources">ИСТОЧНИК ДАННЫХ</string>
+    <string name="src_aidl">2ГИС AIDL</string>
+    <string name="src_aidl_note">основной, всегда включён</string>
+    <string name="src_notif">Уведомления 2ГИС</string>
+    <string name="src_notif_note">для режима кармана</string>
+    <string name="src_a11y">Accessibility</string>
+    <string name="src_a11y_note">читает текст на экране</string>
+    <string name="src_logcat">Лог 2ГИС</string>
+    <string name="src_logcat_note">нужен READ_LOGS</string>
+    <string name="quick_start_hint">AIDL — точный источник 2ГИС. Остальные можно подключить как запасные: они не перебивают свежий AIDL.</string>
 </resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Золотая «аура» в духе skipper-ui: мягкий радиальный свет, поднимающийся
+  снизу. Днём токен почти прозрачный, ночью — заметное свечение над чёрным.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:centerColor="@color/glow_gold_strong"
+        android:centerX="0.5"
+        android:centerY="0.72"
+        android:endColor="@android:color/transparent"
+        android:gradientRadius="75%p"
+        android:startColor="@color/glow_gold"
+        android:type="radial" />
+</shape>

@@ -1,12 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.AtenboroNav" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/accent</item>
-        <item name="colorPrimaryVariant">@color/surface</item>
-        <item name="colorOnPrimary">@color/bg</item>
-        <item name="android:statusBarColor">@color/bg</item>
+    <!--
+      Material Design 3. Корпус — чёрный/серый, акцент — золотой металлик.
+      Родитель DayNight: ночной вариант берётся из values-night/colors.xml,
+      ручной переключатель день/ночь — в шапке (см. ThemeModeSwitch).
+    -->
+    <style name="Theme.AtenboroNav" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/gold</item>
+        <item name="colorOnPrimary">@color/gold_ink</item>
+        <item name="colorPrimaryContainer">@color/gold_container</item>
+        <item name="colorOnPrimaryContainer">@color/gold_deep</item>
+
+        <item name="colorSecondary">@color/steel</item>
+        <item name="colorOnSecondary">@color/bg_elevated</item>
+        <item name="colorSecondaryContainer">@color/surface_variant</item>
+        <item name="colorOnSecondaryContainer">@color/text</item>
+
+        <item name="colorTertiary">@color/gold_deep</item>
+        <item name="colorOnTertiary">@color/gold_bright</item>
+
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="colorOnBackground">@color/text</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/muted</item>
+        <item name="colorOutline">@color/stroke</item>
+        <item name="colorOutlineVariant">@color/stroke</item>
+
+        <item name="colorError">@color/error</item>
+        <item name="colorOnError">@color/bg_elevated</item>
+
+        <item name="android:windowBackground">@drawable/bg_window_glow</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/bg</item>
-        <item name="android:windowBackground">@color/bg</item>
         <item name="android:textColor">@color/text</item>
+
+        <item name="materialCardViewStyle">@style/Widget.AtenboroNav.Card</item>
+        <item name="materialButtonStyle">@style/Widget.AtenboroNav.Button</item>
+        <item name="materialSwitchStyle">@style/Widget.AtenboroNav.Switch</item>
+    </style>
+
+    <!-- Карточка M3: большой радиус, тонкая обводка, без тени -->
+    <style name="Widget.AtenboroNav.Card" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardBackgroundColor">@color/surface_glass</item>
+        <item name="cardCornerRadius">24dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/stroke</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <!-- Primary: золотой металлик -->
+    <style name="Widget.AtenboroNav.Button" parent="Widget.Material3.Button">
+        <item name="backgroundTint">@color/gold</item>
+        <item name="android:textColor">@color/gold_ink</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="cornerRadius">16dp</item>
+    </style>
+
+    <style name="Widget.AtenboroNav.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
+        <item name="android:textColor">@color/gold_deep</item>
+        <item name="backgroundTint">@color/gold_container</item>
+        <item name="cornerRadius">16dp</item>
+    </style>
+
+    <style name="Widget.AtenboroNav.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:textColor">@color/text</item>
+        <item name="strokeColor">@color/stroke</item>
+        <item name="cornerRadius">16dp</item>
+    </style>
+
+    <!-- Переключатель дня/ночи в стиле sun/moon -->
+    <style name="Widget.AtenboroNav.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="thumbIconTint">@color/gold</item>
+        <item name="trackDecorationTint">@color/gold_outline</item>
+        <item name="trackTint">@color/surface_variant</item>
+    </style>
+
+    <!-- Типографика -->
+    <style name="TextAppearance.AtenboroNav.Section" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:textColor">@color/gold</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.12</item>
+        <item name="android:textSize">11sp</item>
+    </style>
+
+    <style name="TextAppearance.AtenboroNav.Title" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.AtenboroNav.Row" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">@color/text</item>
+    </style>
+
+    <style name="TextAppearance.AtenboroNav.Caption" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textColor">@color/muted</item>
     </style>
 </resources>
