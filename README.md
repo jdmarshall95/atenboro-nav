@@ -4,7 +4,9 @@
 
 **2ГИС → OLED** на плате HW-364A (**ESP8266** + **SSD1306** 128×64 dual-color). Сейчас Wi‑Fi SoftAP; дальше — **ESP32** + BLE. Open source, MIT.
 
-[![Version](https://img.shields.io/badge/version-1.1-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
+Приложения два: **Android** (читает 2ГИС через Dashboard AIDL API) и **iOS** (читает через Live Activity). Оба собирают один и тот же кадр и шлют его на плату.
+
+[![Version](https://img.shields.io/badge/version-1.2-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square&labelColor=16181f)](LICENSE)
 
 Android-прокси читает манёвры 2ГИС через **Dashboard AIDL API** (запасные каналы — notification / Accessibility) и рисует turn-by-turn на OLED: шеврон, дистанция, мигающий лимит камеры.
@@ -14,8 +16,8 @@ Android-прокси читает манёвры 2ГИС через **Dashboard 
 </p>
 
 ```
-2ГИС ── AIDL Dashboard API ──► Atenboro (Android) ── SoftAP ──► ESP8266 OLED
-        (запас: notif / a11y)
+2ГИС ── Dashboard AIDL API ──► Atenboro (Android) ──► SoftAP ──► ESP8266 OLED
+2ГИС ── Live Activity ───────► Atenboro (iOS)     ──► SoftAP ──► ESP8266 OLED
 ```
 
 ## OLED HUD
@@ -108,6 +110,37 @@ Android-прокси читает манёвры 2ГИС через **Dashboard 
 | 6 | Обновить лог | Локальные события |
 | 7 | Лента | inject / notif / screen / board |
 
+## Приложение iOS
+
+У 2ГИС на iOS нет AIDL, поэтому данные снимаются с **Live Activity** — системного
+виджета навигации, который 2ГИС обновляет примерно раз в секунду. Приложение читает
+его через ActivityKit, нормализует в тот же кадр `POST /nav` и отправляет на плату:
+ни протокол, ни прошивка, ни кодоимена манёвров дублировать не пришлось.
+
+| # | Источник | Что отдаёт | Роль |
+|---|----------|-----------|------|
+| 1 | **Live Activity** — `Activity<NavigatorLiveAttributes>` | манёвр, дистанция, прогресс, время в пути, лимит, камера, светофор | основной |
+| 2 | URL-схема `atenboro://` | любой кадр вручную или из «Команд» | отладка / сценарии |
+| 3 | CarPlay | сигнал «навигация жива», когда приложение в фоне | маркер живости |
+
+<p align="center">
+  <img src="docs/screens/ios/01-launch.png" width="260" alt="iOS: главный экран" />
+  <img src="docs/screens/ios/04-url-probe.png" width="260" alt="iOS: кадр через atenboro://" />
+  <img src="docs/screens/ios/05-night.png" width="260" alt="iOS: ночная тема" />
+</p>
+
+Экран один: крупный манёвр и дистанция, под ними прогресс маршрута, время в пути и
+источник кадра; строки статуса — плата, сеть, активность 2ГИС. Шестерня открывает
+настройки (адрес платы, выбор источника). Палитра та же, что в Android-приложении:
+чёрный / серый / золото, светлая и тёмная тема.
+
+> **Почему тип называется `NavigatorLiveAttributes`.** ActivityKit отдаёт активности
+> только при совпадении **имени Swift-типа** атрибутов, а хука вроде
+> `activityAttributesName` в SDK нет (`AnyActivityAttributes` — только с iOS 18).
+> В бинаре 2ГИС есть `Activity<NavigatorLiveAttributes>`, поэтому наш тип объявлен
+> так же. Полное реверс-инжиниринговое обоснование —
+> [`docs/IOS-2GIS-REVERSE.md`](docs/IOS-2GIS-REVERSE.md).
+
 ## Быстрый старт
 
 **Прошивка**
@@ -124,6 +157,20 @@ SoftAP: `atenboro-nav` / `atenboro1` → `http://192.168.4.1`
 1. Установить APK, Wi‑Fi → SoftAP платы.
 2. «Подключить к плате» → Accessibility → уведомления → прокси.
 3. Навигация в 2ГИС (экран можно блокировать).
+
+**iOS** (Xcode 15+, deployment target iOS 16.1)
+
+```bash
+cd ios && xcodegen generate          # затем в project.pbxproj objectVersion = 56
+xcodebuild -project AtenboroNav.xcodeproj -scheme AtenboroNav \
+  -destination 'id=<UDID устройства>' \
+  DEVELOPMENT_TEAM=<TEAM> CODE_SIGN_STYLE=Automatic -allowProvisioningUpdates test
+```
+
+1. Установить приложение, Wi‑Fi → SoftAP платы (или вписать адрес в настройках).
+2. Запустить навигацию в 2ГИС — Live Activity должна появиться на экране.
+3. Кадр по URL-схеме для проверки без 2ГИС:
+   `atenboro://left?maneuverDistance=250&progress=41&remainingTime=780&speedLimit=60`.
 
 Чеклист и locked-screen тест: [`docs/TESTING.md`](docs/TESTING.md).  
 Симуляция заезда (inject HUD / mock GPS): [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) — режимы `hud`, `geo`, `full`.  
@@ -158,9 +205,12 @@ curl -s -X POST http://192.168.4.1/nav \
 | | |
 |--|--|
 | [`firmware/`](firmware/) | SoftAP + OLED |
-| [`android/`](android/) | прокси 2ГИС |
+| [`android/`](android/) | прокси 2ГИС (Android, Dashboard AIDL) |
+| [`ios/`](ios/) | прокси 2ГИС (iOS, Live Activity) |
 | [`docs/screens/`](docs/screens/) | OLED + UI |
 | [`docs/screens/field/`](docs/screens/field/) | живые GIF/MP4 платы |
+| [`docs/screens/ios/`](docs/screens/ios/) | скриншоты iOS-приложения |
+| [`docs/IOS-2GIS-REVERSE.md`](docs/IOS-2GIS-REVERSE.md) | как 2ГИС читается на iOS |
 | [`docs/WIRING.md`](docs/WIRING.md) | пины |
 | [`docs/TESTING.md`](docs/TESTING.md) | чеклист |
 | [`scripts/sim_route_drive.sh`](scripts/sim_route_drive.sh) | симуляция заезда (hud/geo/full) |

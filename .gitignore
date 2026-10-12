@@ -18,6 +18,17 @@ android/captures/
 *.aab
 *.keystore
 
+# iOS / Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.dSYM.zip
+*.dSYM
+
+# Scratch / temp
+tmp/
+
 # OS / junk
 .DS_Store
 Thumbs.db

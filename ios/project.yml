@@ -1,0 +1,66 @@
+name: AtenboroNav
+options:
+  bundleIdPrefix: com.atenboro
+  deploymentTarget:
+    iOS: "16.1"
+  createIntermediateGroups: true
+  developmentLanguage: ru
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "1.2"
+    CURRENT_PROJECT_VERSION: "113"
+    CODE_STYLE_INDENT_STRING: "    "
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+targets:
+  AtenboroNav:
+    type: application
+    platform: iOS
+    sources:
+      - path: AtenboroNav
+    info:
+      path: AtenboroNav/Support/Info.plist
+      properties:
+        CFBundleDisplayName: Atenboro Nav
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        LSApplicationQueriesSchemes:
+          - dgis
+          - grymmobile
+          - ru-doublegis-grymmobile
+          - urbi
+        CFBundleURLTypes:
+          - CFBundleURLName: com.atenboro.nav
+            CFBundleURLSchemes:
+              - atenboro
+        UIBackgroundModes:
+          - location
+          - remote-notification
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        NSLocationWhenInUseUsageDescription: >-
+          Нужен для проверки, активна ли навигация 2ГИС в момент чтения данных.
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.atenboro.nav
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: NO
+  AtenboroNavTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: AtenboroNavTests
+    dependencies:
+      - target: AtenboroNav
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.atenboro.nav.tests
+        GENERATE_INFOPLIST_FILE: YES

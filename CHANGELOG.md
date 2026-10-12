@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.2] — 2026-10-12
+
+### Added
+- **iOS-приложение** (`ios/`, Swift, UIKit, deployment target iOS 16.1): второй
+  прокси 2ГИС → плата. Кадр `POST /nav`, кодоимена манёвров и API платы общие с
+  Android — дублировать протокол не пришлось.
+- Источник №1 — **Live Activity** 2ГИС через ActivityKit
+  (`Sources/LiveActivitySource.swift`): манёвр, дистанция, прогресс, время в пути,
+  лимит скорости, камера, светофор. Опрос раз в 2 с, «живость» — активность,
+  обновлённая менее чем за 6 с.
+- Запасные каналы: URL-схема `atenboro://left?maneuverDistance=250&progress=41…`
+  (ручная проверка и «Команды») и CarPlay как сигнал «навигация жива», когда
+  приложение ушло в фон.
+- Экран один, как в Android: крупный манёвр и дистанция, ниже прогресс / время в
+  пути / источник кадра, строки статуса (плата, сеть, активность 2ГИС),
+  шестерёнка с настройками. Палитра чёрный / серый / золото, светлая и тёмная тема.
+- Проект собирается XcodeGen (`ios/project.yml`), тесты — XCTest.
+- Реверс-инжиниринг 2ГИС на iOS: [`docs/IOS-2GIS-REVERSE.md`](docs/IOS-2GIS-REVERSE.md).
+
+### Fixed
+- Live Activity сначала не читалась («нет активности 2ГИС» при живой навигации):
+  ActivityKit фильтрует активности по **имени Swift-типа** атрибутов, а хука вроде
+  `activityAttributesName` в SDK нет (`AnyActivityAttributes` — только iOS 18).
+  Тип переименован из `NavActivityAttributes` в `NavigatorLiveAttributes` — ровно
+  как в бинаре 2ГИС (`Activity<NavigatorLiveAttributes>`).
+
+### Verified
+- `xcodebuild test` — **86/86** зелёные на симуляторе и на iPhone 15 Pro Max
+  (iOS 26.6.2, беспроводная отладка).
+- Живое чтение с 2ГИС на телефоне: манёвр и дистанция на экране приложения меняются
+  синхронно с навигацией 2ГИС.
+- URL-схема на устройстве: `atenboro://left?maneuverDistance=250&progress=41&
+  remainingTime=780&speedLimit=60` → «Налево · 250 м · 41 % · источник: urlScheme».
+- App Group для чтения активности не требуется: у 2ГИС нет activity-группы в
+  entitlements, но активность видна.
+- `./gradlew assembleDebug test` на 1.2 — без регрессий.
+
 ## [1.1] — 2026-10-10
 
 ### Changed
