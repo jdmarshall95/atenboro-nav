@@ -1,0 +1,4 @@
+# Dev / scripts environment for atenboro-nav
+ruff>=0.17
+pre-commit>=4.0
+Pillow>=10.0
