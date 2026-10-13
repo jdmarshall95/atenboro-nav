@@ -24,14 +24,13 @@ import math
 import os
 import re
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 ADB = os.environ.get("ADB", os.path.expanduser("~/Android/Sdk/platform-tools/adb"))
 GIS_PKG = "ru.dublgis.dgismobile"
@@ -166,7 +165,7 @@ def fetch_dgis(
     if len(pts) < 2:
         # fallback: some payloads nest differently
         raw = json.dumps(route)
-        for m in re.finditer(r"LINESTRING\(([^)]+)\)", raw, re.I):
+        for m in re.finditer(r"LINESTRING\(([^)]+)\)", raw, re.IGNORECASE):
             pts.extend(parse_linestring(f"LINESTRING({m.group(1)})"))
     if len(pts) < 2:
         raise RuntimeError("2GIS route has no LINESTRING geometry")
@@ -290,7 +289,7 @@ def nmea_rmc(lat: float, lon: float, speed_kmh: float, bearing: float) -> str:
     lat_d, lon_d = int(lat), int(lon)
     lat_m = (lat - lat_d) * 60.0
     lon_m = (lon - lon_d) * 60.0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     t = now.strftime("%H%M%S.00")
     d = now.strftime("%d%m%y")
     spd = speed_kmh / 1.852
@@ -515,7 +514,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         (out_dir / "mock-final.json").write_text(json.dumps(mock, ensure_ascii=False, indent=2), encoding="utf-8")
         nav = mock.get("nav") or {}
         log(f"mock nav={json.dumps(nav, ensure_ascii=False)}")
-    except Exception as e:
+    except (OSError, urllib.error.URLError, ValueError, TypeError) as e:
         log(f"mock debug skip: {e}")
     log(f"artifacts → {out_dir}")
     return 0
@@ -527,6 +526,6 @@ if __name__ == "__main__":
     except urllib.error.HTTPError as e:
         log(f"HTTP {e.code}: {e.read()[:300]!r}")
         raise SystemExit(1)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — CLI catch-all for actionable exit
         log(f"FAIL: {e}")
         raise SystemExit(1)
