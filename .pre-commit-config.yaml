@@ -1,0 +1,28 @@
+# Local hooks: pip install -r scripts/requirements.txt && pre-commit install
+# Run all: pre-commit run --all-files
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff-check
+        name: ruff (scripts/)
+        files: ^scripts/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+
+  - repo: local
+    hooks:
+      # Fail if staged paths match *.bin / *.apk outside releases/
+      - id: no-binaries-outside-releases
+        name: forbid .bin/.apk outside releases/
+        language: fail
+        entry: >-
+          Do not commit .bin/.apk into the tree (except under releases/).
+          Publish artifacts via GitHub Releases instead.
+        files: (?i)\.(bin|apk)$
+        exclude: ^releases/

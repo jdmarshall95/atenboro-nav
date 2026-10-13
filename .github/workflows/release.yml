@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-firmware:
+    name: release-firmware
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/requirements-ci.txt
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            firmware/.pio
+          key: pio-release-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: |
+            pio-release-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: pip install -r .github/requirements-ci.txt
+
+      - name: Build firmware
+        working-directory: firmware
+        run: pio run
+
+      - name: Stage release artifact
+        run: |
+          mkdir -p dist
+          cp firmware/.pio/build/nodemcuv2/firmware.bin \
+            "dist/atenboro-nav-firmware-${GITHUB_REF_NAME}.bin"
+          ls -la dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Atenboro Nav ${{ github.ref_name }}
+          generate_release_notes: true
+          files: dist/atenboro-nav-firmware-${{ github.ref_name }}.bin
+          fail_on_unmatched_files: true
