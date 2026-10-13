@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-scripts:
+    name: lint-scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install ruff
+        run: pip install --upgrade ruff
+
+      - name: Ruff check scripts/
+        run: ruff check scripts/
+
+  build-firmware:
+    name: build-firmware
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            firmware/.pio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: |
+            pio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build firmware
+        working-directory: firmware
+        run: pio run
+
+      - name: Upload firmware.bin
+        uses: actions/upload-artifact@v4
+        with:
+          name: atenboro-firmware-${{ github.sha }}
+          path: firmware/.pio/build/nodemcuv2/firmware.bin
+          if-no-files-found: error
+          retention-days: 14
+
+  validate-android:
+    name: validate-android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
