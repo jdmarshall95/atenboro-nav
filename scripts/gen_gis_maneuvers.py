@@ -43,7 +43,7 @@ def page_labels(pdf: Path) -> list[list[tuple[float, float, float, float, str]]]
     html = subprocess.check_output(["pdftotext", "-bbox", str(pdf), "-"], text=True)
     pages: list[list[tuple[float, float, float, float, str]]] = []
     for page_m in re.finditer(
-        r'<page width="([^"]+)" height="([^"]+)">(.*?)</page>', html, re.S
+        r'<page width="([^"]+)" height="([^"]+)">(.*?)</page>', html, re.DOTALL
     ):
         words: list[tuple[float, float, float, float, str]] = []
         for wm in re.finditer(

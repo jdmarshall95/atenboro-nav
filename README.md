@@ -4,7 +4,8 @@
 
 **2ГИС → OLED** на плате HW-364A (**ESP8266** + **SSD1306** 128×64 dual-color). Сейчас Wi‑Fi SoftAP; дальше — **ESP32** + BLE. Open source, MIT.
 
-[![Version](https://img.shields.io/badge/version-1.0.9-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
+[![CI](https://github.com/jdmarshall95/atenboro-nav/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jdmarshall95/atenboro-nav/actions/workflows/ci.yml?query=branch%3Amain)
+[![Version](https://img.shields.io/badge/version-1.0.10-FFCC00?style=flat-square&labelColor=16181f)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square&labelColor=16181f)](LICENSE)
 
 Android-прокси читает манёвры 2ГИС через **Dashboard AIDL API** (запасные каналы — notification / Accessibility) и рисует turn-by-turn на OLED: шеврон, дистанция, мигающий лимит камеры.

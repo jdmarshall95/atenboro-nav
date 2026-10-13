@@ -28,7 +28,7 @@ LABEL_H = 26
 def parse_bmp(name: str) -> tuple[int, int, bytes]:
     w = int(re.search(rf"{name}_W\s*=\s*(\d+)", HDR).group(1))
     h = int(re.search(rf"{name}_H\s*=\s*(\d+)", HDR).group(1))
-    block = re.search(rf"{name}_BMP\[\][^=]*=\s*\{{(.*?)\}};", HDR, re.S).group(1)
+    block = re.search(rf"{name}_BMP\[\][^=]*=\s*\{{(.*?)\}};", HDR, re.DOTALL).group(1)
     data = bytes(int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]{2})", block))
     return w, h, data
 
